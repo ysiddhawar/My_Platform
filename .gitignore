@@ -1,0 +1,37 @@
+# --- Python Specific ---
+# Ignore the virtual environment inside your 'api/' subfolder
+api/venv/
+# Ignore any other standard venv names if you create them later
+venv/
+.venv/
+env/
+# Ignore Python cache files (these are everywhere in your subfolders)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- Database & Persistence ---
+# You have SQLite files in your root. These should NOT be in Git 
+# because they change every time you run the program.
+*.db
+*.db-shm
+*.db-wal
+# Specific to your persistence_layer if it generates local files
+persistence_layer/*.sqlite
+
+# --- IDE & System ---
+# macOS specific junk
+.DS_Store
+# VS Code specific settings (optional, but keeps things clean)
+.vscode/
+
+# --- Environment & Sensitive Data ---
+# If you ever create a .env file for API keys for brokers
+.env
+
+# --- Build & Distribution ---
+dist/
+build/
+*.egg-info/
+node_modules/

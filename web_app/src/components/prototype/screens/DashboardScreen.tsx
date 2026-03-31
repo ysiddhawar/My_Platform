@@ -1,0 +1,2250 @@
+import { useMemo, useState } from 'react';
+import { useQuery } from 'react-query';
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+
+import { fetchChartCatalog, fetchDashboardChartContracts, fetchOverview, runMetricComputation } from '@/api/prototype';
+import { ChartFrame } from '@/components/charts/ChartFrame';
+import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
+import { GenericTimeSeriesChart } from '@/components/charts/GenericTimeSeriesChart';
+import { HeatmapChart } from '@/components/charts/HeatmapChart';
+import { HistogramChart } from '@/components/charts/HistogramChart';
+import { MetricsBarChart } from '@/components/charts/MetricsBarChart';
+import { PieMetricChart } from '@/components/charts/PieMetricChart';
+import { RadarMetricChart } from '@/components/charts/RadarMetricChart';
+import { StatCard } from '@/components/prototype/domain/StatCard';
+import type { DashboardChartContract, OverviewData, TradeRecord } from '@/types/prototype';
+import { defaultDashboardFilters, defaultDashboardGroupOrder, usePrototypeStore } from '@/state/prototypeStore';
+import { formatCompactNumber, formatCurrency, formatDate, formatMinutes, formatNumber, formatPercent, humanizeKey } from '@/utils/format';
+
+type MetricSection = {
+  title: string;
+  keys: string[];
+};
+
+type BookMatrix = {
+  labels: string[];
+  matrix: number[][];
+};
+
+type ChartDatum = {
+  metric: string;
+  value: number;
+};
+
+const defaultMetricSections: MetricSection[] = [
+  { title: 'Journal Metrics', keys: ['trade_count', 'win_count', 'loss_count', 'win_rate', 'loss_rate', 'average_win', 'average_loss', 'payoff_ratio', 'profit_factor', 'expectancy', 'cost_summary', 'adjusted_pnl'] },
+  { title: 'Performance Metrics', keys: ['sharpe', 'sortino', 'calmar', 'cagr', 'rolling_sharpe', 'net_sharpe', 'net_sortino', 'net_cagr'] },
+  { title: 'Risk Metrics', keys: ['volatility', 'rolling_volatility', 'adaptive_rolling_volatility', 'max_drawdown', 'rolling_drawdown', 'drawdown_duration', 'ulcer_index', 'downside_deviation', 'value_at_risk', 'conditional_var'] },
+  { title: 'Distribution Metrics', keys: ['normality_test', 'skewness', 'kurtosis', 'fat_tail_index', 'tail_ratio', 'student_t_fit', 'pareto_fit', 'power_law_exponent', 'lognormal_test', 'autocorrelation', 'pareto_tail_estimator', 'power_law_fit'] },
+  { title: 'Regime Metrics', keys: ['volatility_regime', 'regime_labeling', 'regime_sharpe', 'regime_drawdown', 'regime_transition_matrix', 'regime_switching', 'volatility_clustering', 'garch_volatility', 'regime_breakdown', 'regime_fragility'] },
+  { title: 'Robustness Metrics', keys: ['walk_forward', 'bootstrap', 'block_bootstrap', 'parameter_sensitivity', 'noise_stability', 'regime_stability', 'monte_carlo_stability', 'stability_score'] },
+  { title: 'Portfolio Metrics', keys: ['correlation', 'covariance_matrix', 'portfolio_variance', 'risk_contribution', 'risk_parity', 'target_volatility', 'drawdown_correlation', 'crash_overlap', 'systemic_fragility', 'portfolio_fragility_index', 'portfolio_preprocessor', 'diversification_ratio', 'effective_number_of_bets', 'hierarchical_risk_parity', 'dynamic_cluster_risk_budgeting', 'drawdown_aware_capital_allocator'] },
+  { title: 'Capital Metrics', keys: ['risk_budgeting', 'kelly', 'portfolio_position_sizer', 'position_sizer', 'capital_engine'] },
+  { title: 'Risk Control Metrics', keys: ['kill_switch', 'dynamic_throttle', 'capital_throttle_engine'] },
+  { title: 'Stress Metrics', keys: ['stress_engine', 'volatility_spike', 'liquidity_shock', 'correlation_spike', 'crash_simulation', 'stress_scenarios', 'regime_path_generator', 'spread_regime_generator', 'execution_impact_model'] },
+  { title: 'Survival Metrics', keys: ['fragility_score', 'deployable_leverage', 'kill_switch_threshold', 'capital_throttle_policy', 'drawdown_percentile', 'capital_decay', 'risk_of_ruin', 'ruin_probability_mc', 'survival_score', 'survival_engine'] },
+];
+
+function average(values: number[]): number {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+}
+
+function sampleStd(values: number[]): number {
+  if (values.length < 2) return 0;
+  const mean = average(values);
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1);
+  return Math.sqrt(Math.max(variance, 0));
+}
+
+function percentile(values: number[], p: number): number {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = (sorted.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) return sorted[lower];
+  const weight = index - lower;
+  return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+}
+
+function downsideDeviation(values: number[]): number {
+  const negatives = values.filter((value) => value < 0);
+  if (!negatives.length) return 0;
+  const variance = negatives.reduce((sum, value) => sum + value ** 2, 0) / negatives.length;
+  return Math.sqrt(Math.max(variance, 0));
+}
+
+function skewness(values: number[]): number {
+  const mean = average(values);
+  const std = sampleStd(values);
+  if (!values.length || std === 0) return 0;
+  return average(values.map((value) => ((value - mean) / std) ** 3));
+}
+
+function kurtosis(values: number[]): number {
+  const mean = average(values);
+  const std = sampleStd(values);
+  if (!values.length || std === 0) return 0;
+  return average(values.map((value) => ((value - mean) / std) ** 4));
+}
+
+function autocorrelation(values: number[], lag = 1): number {
+  if (values.length <= lag) return 0;
+  const mean = average(values);
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < values.length; index += 1) {
+    const centered = values[index] - mean;
+    denominator += centered * centered;
+    if (index >= lag) {
+      numerator += centered * (values[index - lag] - mean);
+    }
+  }
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
+function rollingWindow(values: number[], size: number, mapper: (window: number[]) => number): number[] {
+  if (values.length < size || size < 2) return [];
+  const output: number[] = [];
+  for (let index = size; index <= values.length; index += 1) {
+    output.push(mapper(values.slice(index - size, index)));
+  }
+  return output;
+}
+
+function buildReturns(trades: TradeRecord[]): number[] {
+  let equity = 100000;
+  return trades
+    .filter((trade) => trade.is_closed)
+    .map((trade) => {
+      const pnl = Number(trade.net_pnl || 0);
+      const denominator = Math.max(Math.abs(equity), 1);
+      const value = pnl / denominator;
+      equity += pnl;
+      return Number.isFinite(value) ? value : 0;
+    });
+}
+
+function buildEquitySeries(trades: TradeRecord[]): Array<{ t: string; equity: number }> {
+  const closed = trades.filter((trade) => trade.is_closed);
+  return closed.reduce<Array<{ t: string; equity: number }>>((rows, trade, index) => {
+    const previous = rows[index - 1]?.equity || 100000;
+    const rawDate = trade.entry_date || trade.entry_time?.slice(0, 10);
+    rows.push({
+      t: rawDate ? formatDate(rawDate) : `Trade ${index + 1}`,
+      equity: previous + Number(trade.net_pnl || 0),
+    });
+    return rows;
+  }, []);
+}
+
+function buildDailyNetCurve(trades: TradeRecord[]): Array<{ date: string; label: string; net: number; cumulative: number }> {
+  const byDay = new Map<string, number>();
+  trades
+    .filter((trade) => trade.is_closed)
+    .forEach((trade) => {
+      const dayKey = trade.entry_date || trade.entry_time?.slice(0, 10);
+      if (!dayKey) return;
+      byDay.set(dayKey, (byDay.get(dayKey) || 0) + Number(trade.net_pnl || 0));
+    });
+
+  let cumulative = 0;
+  return Array.from(byDay.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, net]) => {
+      cumulative += net;
+      return {
+        date,
+        label: formatDate(date),
+        net: normalizeDisplayNumber(net),
+        cumulative: normalizeDisplayNumber(cumulative),
+      };
+    });
+}
+
+function buildTimePatternInsights(trades: TradeRecord[]) {
+  const weekdayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const weekdayPnl = new Map(weekdayLabels.map((label) => [label, 0]));
+  const hourPnl = new Map(Array.from({ length: 24 }, (_, hour) => [hour, 0]));
+  const matrix = weekdayLabels.map(() => Array.from({ length: 24 }, () => 0));
+
+  trades.forEach((trade) => {
+    const dayLabel = String(trade.entry_day_of_week || 'Unknown');
+    const dayIndex = weekdayLabels.indexOf(dayLabel);
+    const hour = trade.entry_hour != null
+      ? Number(trade.entry_hour)
+      : trade.entry_time
+        ? new Date(trade.entry_time).getHours()
+        : null;
+    const pnl = Number(trade.net_pnl || 0);
+
+    if (dayIndex >= 0) {
+      weekdayPnl.set(dayLabel, (weekdayPnl.get(dayLabel) || 0) + pnl);
+    }
+    if (hour != null && Number.isFinite(hour) && hour >= 0 && hour <= 23) {
+      hourPnl.set(hour, (hourPnl.get(hour) || 0) + pnl);
+      if (dayIndex >= 0) {
+        matrix[dayIndex][hour] += 1;
+      }
+    }
+  });
+
+  return {
+    weekdayPnlBars: weekdayLabels.map((label) => ({ metric: label.slice(0, 3), value: normalizeDisplayNumber(weekdayPnl.get(label) || 0) })),
+    hourPnlBars: Array.from({ length: 24 }, (_, hour) => ({
+      metric: `${String(hour).padStart(2, '0')}:00`,
+      value: normalizeDisplayNumber(hourPnl.get(hour) || 0),
+    })),
+    heatmapX: Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0')),
+    heatmapY: weekdayLabels.map((label) => label.slice(0, 3)),
+    tradeCountHeatmap: matrix,
+  };
+}
+
+function buildGroupedSeries(trades: TradeRecord[], returns: number[], selector: (trade: TradeRecord, index: number) => string): Record<string, number[]> {
+  const buckets = new Map<string, number[]>();
+  trades.filter((trade) => trade.is_closed).forEach((trade, index) => {
+    const key = selector(trade, index);
+    const bucket = buckets.get(key) || [];
+    bucket.push(returns[index] ?? 0);
+    buckets.set(key, bucket);
+  });
+  return Object.fromEntries(buckets.entries());
+}
+
+function getTradeLocalDate(trade: TradeRecord): Date | null {
+  const raw = trade.entry_date || trade.entry_time?.slice(0, 10);
+  if (!raw) return null;
+  const parsed = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function startOfWeek(date: Date): Date {
+  const normalized = startOfDay(date);
+  const day = normalized.getDay();
+  const diff = (day + 6) % 7;
+  normalized.setDate(normalized.getDate() - diff);
+  return normalized;
+}
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function startOfYear(date: Date): Date {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function matchesDatePreset(date: Date | null, preset: string, reference: Date): boolean {
+  if (!date || preset === 'all') return true;
+  const current = startOfDay(date).getTime();
+  const today = startOfDay(reference);
+  if (preset === 'today') return current === today.getTime();
+  if (preset === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    return current === yesterday.getTime();
+  }
+  if (preset === 'this_week') return current >= startOfWeek(reference).getTime();
+  if (preset === 'last_week') {
+    const start = startOfWeek(reference);
+    const lastStart = new Date(start);
+    lastStart.setDate(lastStart.getDate() - 7);
+    return current >= lastStart.getTime() && current < start.getTime();
+  }
+  if (preset === 'this_month') return current >= startOfMonth(reference).getTime();
+  if (preset === 'last_month') {
+    const thisMonth = startOfMonth(reference);
+    const lastMonth = new Date(thisMonth.getFullYear(), thisMonth.getMonth() - 1, 1);
+    return current >= lastMonth.getTime() && current < thisMonth.getTime();
+  }
+  if (preset === 'last_3_months') {
+    const start = new Date(reference.getFullYear(), reference.getMonth() - 2, 1);
+    return current >= start.getTime();
+  }
+  if (preset === 'this_year') return current >= startOfYear(reference).getTime();
+  if (preset === 'last_year') {
+    const thisYear = startOfYear(reference);
+    const lastYear = new Date(thisYear.getFullYear() - 1, 0, 1);
+    return current >= lastYear.getTime() && current < thisYear.getTime();
+  }
+  return true;
+}
+
+function buildBookMatrix(trades: TradeRecord[], returns: number[]): BookMatrix {
+  const groupedCandidates = [
+    buildGroupedSeries(trades, returns, (trade) => String(trade.setup_name || trade.strategy_tag || trade.strategy || 'Unspecified')),
+    buildGroupedSeries(trades, returns, (trade) => String(trade.market_type || 'unknown')),
+    buildGroupedSeries(trades, returns, (trade) => String(trade.symbol || 'unknown')),
+  ];
+
+  for (const candidate of groupedCandidates) {
+    const entries = Object.entries(candidate).filter(([, series]) => series.length >= 20);
+    if (entries.length >= 2) {
+      const minLength = Math.min(...entries.map(([, series]) => series.length));
+      if (minLength >= 20) {
+        return {
+          labels: entries.map(([label]) => label),
+          matrix: entries.map(([, series]) => series.slice(-minLength)),
+        };
+      }
+    }
+  }
+
+  if (returns.length >= 60) {
+    const synthetic = [
+      returns.filter((_, index) => index % 3 === 0),
+      returns.filter((_, index) => index % 3 === 1),
+      returns.filter((_, index) => index % 3 === 2),
+    ].filter((series) => series.length >= 20);
+    if (synthetic.length >= 2) {
+      const minLength = Math.min(...synthetic.map((series) => series.length));
+      return {
+        labels: synthetic.map((_, index) => `Book ${index + 1}`),
+        matrix: synthetic.map((series) => series.slice(-minLength)),
+      };
+    }
+  }
+
+  return { labels: [], matrix: [] };
+}
+
+function covarianceMatrix(matrix: number[][]): number[][] {
+  if (matrix.length < 2) return [];
+  return matrix.map((seriesA) =>
+    matrix.map((seriesB) => {
+      const meanA = average(seriesA);
+      const meanB = average(seriesB);
+      const length = Math.min(seriesA.length, seriesB.length);
+      if (length < 2) return 0;
+      let total = 0;
+      for (let index = 0; index < length; index += 1) {
+        total += (seriesA[index] - meanA) * (seriesB[index] - meanB);
+      }
+      return total / (length - 1);
+    }),
+  );
+}
+
+function correlationFromCovariance(covariance: number[][]): number[][] {
+  if (!covariance.length) return [];
+  const stds = covariance.map((row, index) => Math.sqrt(Math.max(row[index] || 0, 0)));
+  return covariance.map((row, rowIndex) =>
+    row.map((value, colIndex) => {
+      const denominator = (stds[rowIndex] || 0) * (stds[colIndex] || 0);
+      return denominator > 0 ? value / denominator : 0;
+    }),
+  );
+}
+
+function maxDrawdownFromReturns(returns: number[]): number {
+  if (!returns.length) return 0;
+  let equity = 1;
+  let peak = 1;
+  let maxDrawdown = 0;
+  returns.forEach((value) => {
+    equity *= 1 + value;
+    peak = Math.max(peak, equity);
+    maxDrawdown = Math.min(maxDrawdown, (equity - peak) / peak);
+  });
+  return maxDrawdown;
+}
+
+function drawdownSeries(returns: number[]): number[] {
+  const output: number[] = [];
+  let equity = 1;
+  let peak = 1;
+  returns.forEach((value) => {
+    equity *= 1 + value;
+    peak = Math.max(peak, equity);
+    output.push(peak > 0 ? (equity - peak) / peak : 0);
+  });
+  return output;
+}
+
+function maxDrawdownDuration(returns: number[]): { maxPeriods: number; currentPeriods: number } {
+  const dd = drawdownSeries(returns);
+  let current = 0;
+  let maxPeriods = 0;
+  dd.forEach((value) => {
+    if (value < 0) {
+      current += 1;
+      maxPeriods = Math.max(maxPeriods, current);
+    } else {
+      current = 0;
+    }
+  });
+  return { maxPeriods, currentPeriods: current };
+}
+
+function parseProbabilityBucket(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const numeric = Number(String(value).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(numeric) ? numeric / 100 : null;
+}
+
+function annualizedGrowth(returns: number[]): number {
+  if (!returns.length) return 0;
+  const totalReturn = returns.reduce((equity, value) => equity * (1 + value), 1);
+  return totalReturn ** (Math.min(252, returns.length) / returns.length) - 1;
+}
+
+const currencyMetricKeys = new Set([
+  'average_win',
+  'average_loss',
+  'adjusted_pnl',
+]);
+
+const percentageMetricKeys = new Set([
+  'win_rate',
+  'loss_rate',
+  'probability_coverage',
+  'pre_trade_coverage',
+  'post_trade_coverage',
+  'checklist_coverage',
+  'decision_readiness',
+  'cost_ratio',
+  'ruin_probability',
+  'mc_ruin_probability',
+  'switch_rate',
+  'tail_fraction',
+  'persistence_ratio',
+  'positive_sample_ratio',
+]);
+
+const chartOnlyMetrics = new Set([
+  'adjusted_pnl',
+  'rolling_sharpe',
+  'rolling_volatility',
+  'adaptive_rolling_volatility',
+  'rolling_drawdown',
+  'correlation',
+  'covariance_matrix',
+  'regime_transition_matrix',
+  'regime_labeling',
+]);
+
+const preferDerivedKeys = new Set([
+  'average_win',
+  'average_loss',
+  'cost_summary',
+  'adjusted_pnl',
+  'equity_curve',
+]);
+
+function normalizeDisplayNumber(value: number): number {
+  return Math.abs(value) < 1e-9 ? 0 : value;
+}
+
+function toNumberArray(metric: unknown): number[] {
+  if (!Array.isArray(metric)) return [];
+  return metric.filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+}
+
+function buildLabeledSeries(values: number[], prefix: string, key: string) {
+  return values.map((value, index) => ({
+    label: `${prefix}${index + 1}`,
+    [key]: normalizeDisplayNumber(value),
+  }));
+}
+
+function buildRegimeTransitionHeatmap(regimes: string[]) {
+  const states = ['LOW', 'MEDIUM', 'HIGH'];
+  const counts = states.map(() => states.map(() => 0));
+  for (let index = 0; index < regimes.length - 1; index += 1) {
+    const fromIndex = states.indexOf(regimes[index] || 'MEDIUM');
+    const toIndex = states.indexOf(regimes[index + 1] || 'MEDIUM');
+    if (fromIndex >= 0 && toIndex >= 0) counts[fromIndex][toIndex] += 1;
+  }
+  return counts.map((row) => {
+    const total = row.reduce((sum, value) => sum + value, 0);
+    return row.map((value) => (total > 0 ? value / total : 0));
+  });
+}
+
+function extractScalar(metric: unknown): number | null {
+  if (typeof metric === 'number' && Number.isFinite(metric)) return metric;
+  if (Array.isArray(metric) && metric.length && typeof metric[metric.length - 1] === 'number') return Number(metric[metric.length - 1]);
+  if (metric && typeof metric === 'object') {
+    const record = metric as Record<string, unknown>;
+    const preferred = [
+      'deployable_survival_score',
+      'survival_score',
+      'ruin_probability',
+      'mc_ruin_probability',
+      'stability_score',
+      'fragility_score',
+      'systemic_fragility_score',
+      'latest_volatility',
+      'current_vol',
+      'worst_case_dd',
+      'risk_amount',
+      'model_size',
+      'allocated_capital',
+      'max_safe_leverage',
+      'capital_multiplier',
+      'throttle_level',
+      'threshold',
+      'drawdown_p95',
+      'capital_decay_rate',
+      'overlap_ratio',
+      'average_correlation',
+      'diversification_ratio',
+      'effective_bets',
+      'portfolio_variance',
+      'payoff_ratio',
+      'profit_factor',
+      'expected_return',
+    ];
+    for (const key of preferred) {
+      if (typeof record[key] === 'number' && Number.isFinite(record[key] as number)) {
+        return Number(record[key]);
+      }
+    }
+    const firstNumeric = Object.values(record).find((value) => typeof value === 'number' && Number.isFinite(value));
+    if (typeof firstNumeric === 'number') return firstNumeric;
+  }
+  return null;
+}
+
+function extractMetricValue(key: string, metric: unknown): string {
+  if (metric == null) {
+    return 'Unavailable';
+  }
+  if (typeof metric === 'number') {
+    const normalized = normalizeDisplayNumber(metric);
+    if (currencyMetricKeys.has(key)) {
+      return formatCurrency(normalized);
+    }
+    if (key.includes('rate') || key.includes('probability') || key.includes('score') || key === 'win_rate' || key === 'loss_rate') {
+      if (normalized >= 0 && normalized <= 1) return formatPercent(normalized);
+    }
+    return Math.abs(normalized) <= 10 ? formatNumber(normalized) : formatCompactNumber(normalized);
+  }
+  if (typeof metric === 'string' || typeof metric === 'boolean') {
+    return String(metric);
+  }
+  if (Array.isArray(metric)) {
+    return 'Shown in chart';
+  }
+  const record = metric as Record<string, unknown>;
+  if (chartOnlyMetrics.has(key)) {
+    return 'Shown in chart';
+  }
+  if (key === 'adjusted_pnl') {
+    return formatCurrency(Number(record.total_net_pnl || 0));
+  }
+  if (key === 'cost_summary') {
+    return formatCurrency(Number(record.total_cost || 0));
+  }
+  if (key === 'student_t_fit') {
+    return `Df ${formatNumber(Number(record.df || record.degrees_of_freedom || 0))} · Scale ${formatNumber(Number(record.scale || 0))}`;
+  }
+  if (key === 'pareto_fit') {
+    return `Alpha ${formatNumber(Number(record.pareto_alpha || record.alpha || 0))} · Threshold ${formatNumber(Number(record.tail_threshold || record.threshold || 0))}`;
+  }
+  if (key === 'power_law_exponent' || key === 'power_law_fit') {
+    return `Alpha ${formatNumber(Number(record.power_law_alpha || record.alpha || 0))}`;
+  }
+  if (key === 'lognormal_test') {
+    return `KS ${formatNumber(Number(record.lognormal_ks_stat || 0))} · P ${formatNumber(Number(record.lognormal_p_value || 0))}`;
+  }
+  if (key === 'normality_test') {
+    const score = Number(record.jarque_bera_score || 0);
+    const normal = Boolean(record.approximately_normal);
+    return `${normal ? 'Closer to normal' : 'Non-normal'} · JB ${formatNumber(score)}`;
+  }
+  const scalar = extractScalar(metric);
+  if (scalar != null) {
+    const scalarKey = Object.entries(record).find(([, value]) => typeof value === 'number' && Number(value) === scalar)?.[0] || 'value';
+    if (scalar >= 0 && scalar <= 1 && /(rate|ratio|probability|score)/i.test(scalarKey)) {
+      return `${humanizeKey(scalarKey)}: ${formatPercent(scalar)}`;
+    }
+    return `${humanizeKey(scalarKey)}: ${formatNumber(scalar)}`;
+  }
+  const firstString = Object.entries(record).find(([, value]) => typeof value === 'string');
+  if (firstString) {
+    return `${humanizeKey(firstString[0])}: ${String(firstString[1])}`;
+  }
+  return `${Object.keys(record).length} fields`;
+}
+
+function metricInterpretation(key: string, metric: unknown): string | null {
+  if (metric == null) return metricRequirement(key);
+  const scalar = extractScalar(metric);
+  const notes: Record<string, string> = {
+    average_win: 'Higher is better. This is the average profit on winning trades.',
+    average_loss: 'Closer to zero is better. Larger negative values mean bigger average losses.',
+    payoff_ratio: 'Higher is better. Above 1 means average winners are larger than average losers.',
+    profit_factor: 'Higher is better. Below 1 means losses outweigh profits.',
+    expectancy: 'Higher is better. Positive expectancy means the trade process is profitable on average.',
+    sharpe: 'Higher is better. It measures return earned per unit of volatility.',
+    sortino: 'Higher is better. It focuses only on downside volatility.',
+    calmar: 'Higher is better. It compares growth against drawdown pain.',
+    cagr: 'Higher is better, but it should be judged alongside drawdown.',
+    volatility: 'Lower is calmer. High volatility means a bumpier equity path.',
+    max_drawdown: 'Less severe is better. Deeper drawdowns mean larger capital damage.',
+    drawdown_duration: 'Lower is better. Long drawdowns mean slower recovery.',
+    ulcer_index: 'Lower is better. It captures the depth and persistence of drawdowns.',
+    downside_deviation: 'Lower is better. It measures harmful volatility only.',
+    value_at_risk: 'Less negative is safer. It estimates a typical bad-tail loss.',
+    conditional_var: 'Less negative is safer. It estimates the average loss beyond VaR.',
+    skewness: 'Positive is usually friendlier. Negative skew can hide crash-like losses.',
+    kurtosis: 'Lower is usually calmer. High kurtosis suggests fatter tails.',
+    tail_ratio: 'Higher is generally better. It means the upside tail is stronger than the downside tail.',
+    autocorrelation: 'Closer to zero is cleaner. High autocorrelation can imply path dependence.',
+    stability_score: 'Higher is better. It summarizes robustness across multiple checks.',
+    diversification_ratio: 'Higher is better. It means the portfolio is getting more diversification benefit.',
+    effective_number_of_bets: 'Higher is better. It reflects how diversified the exposures really are.',
+    deployable_leverage: 'Higher is only good if drawdown remains controlled.',
+    risk_of_ruin: 'Lower is better. This should stay close to zero.',
+    survival_score: 'Higher is better. It reflects deployment durability.',
+  };
+  if (notes[key]) return notes[key];
+  if (percentageMetricKeys.has(key) && scalar != null) return 'Interpret as a rate. Higher is better only when the metric represents success or coverage.';
+  if (typeof metric === 'object' && metric && !Array.isArray(metric)) return 'Read this as a model summary, not a single score.';
+  return null;
+}
+
+function metricRequirement(key: string): string | null {
+  const requirements: Record<string, string> = {
+    average_loss: 'Needs at least one losing closed trade.',
+    payoff_ratio: 'Needs both winning and losing closed trades.',
+    profit_factor: 'Needs both gross profit and gross loss observations.',
+    sortino: 'Needs downside-return observations.',
+    rolling_sharpe: 'Needs a longer return history to build a rolling series.',
+    rolling_volatility: 'Needs a longer return history to build a rolling series.',
+    adaptive_rolling_volatility: 'Needs a longer return history to build an adaptive series.',
+    drawdown_duration: 'Needs at least one drawdown period.',
+    ulcer_index: 'Needs a non-flat equity path.',
+    value_at_risk: 'Needs a stable return distribution sample.',
+    conditional_var: 'Needs tail-loss observations.',
+    normality_test: 'Needs enough return observations to assess distribution shape.',
+    student_t_fit: 'Needs enough return observations to fit a heavy-tail model.',
+    pareto_fit: 'Needs enough tail observations.',
+    power_law_exponent: 'Needs enough tail observations.',
+    lognormal_test: 'Needs positive-valued observations.',
+    autocorrelation: 'Needs sequential return observations.',
+    regime_transition_matrix: 'Needs a regime series across multiple periods.',
+    walk_forward: 'Needs segmented return windows.',
+    correlation: 'Needs at least two aligned return books.',
+    covariance_matrix: 'Needs at least two aligned return books.',
+    portfolio_variance: 'Needs aligned book returns and allocation weights.',
+    stress_engine: 'Needs aligned return books and stress assumptions.',
+    survival_engine: 'Needs impact, leverage, and survival policy inputs.',
+  };
+  return requirements[key] || null;
+}
+
+function buildMetricPayload(data: OverviewData | undefined) {
+  const trades = data?.trades || [];
+  const closed = trades.filter((trade) => trade.is_closed);
+  const returns = buildReturns(trades);
+  const books = buildBookMatrix(trades, returns);
+  const strategyPayload = Object.fromEntries(books.labels.map((label, index) => [label, books.matrix[index]]));
+  const spreadMatrix = books.matrix.length
+    ? books.matrix.map((series) => series.map((value) => Math.min(0.02, Math.max(0.00005, Math.abs(value) * 0.08 + 0.0001))))
+    : undefined;
+
+  return {
+    returns,
+    net_pnl: closed.map((trade) => Number(trade.net_pnl || 0)),
+    gross_pnl: closed.map((trade) => Number(trade.gross_pnl || 0)),
+    brokerage: closed.map((trade) => Number(trade.commission || 0) + Number(trade.fees || 0)),
+    slippage: closed.map((trade) => Number(trade.slippage_cost || 0)),
+    swaps: closed.map((trade) => Number(trade.swaps || 0)),
+    strategies: Object.keys(strategyPayload).length ? strategyPayload : undefined,
+    capital: 100000,
+    total_capital: 100000,
+    target_volatility: 0.15,
+    max_drawdown_threshold: 0.25,
+    max_leverage: 3,
+    fractional_kelly: 0.5,
+    risk_budget: books.labels.length ? new Array(books.labels.length).fill(1 / books.labels.length) : undefined,
+    spread_matrix: spreadMatrix,
+    ruin_floor: 0.2,
+    entry_price: Number(closed[closed.length - 1]?.entry_price || 100),
+    stop_price: Number(closed[closed.length - 1]?.stop_loss_at_entry || 95),
+    risk_per_trade: 0.01,
+  };
+}
+
+function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unknown> {
+  const trades = data?.trades || [];
+  const closed = trades.filter((trade) => trade.is_closed);
+  const returns = buildReturns(trades);
+  const netPnls = closed.map((trade) => Number(trade.net_pnl || 0));
+  const wins = netPnls.filter((value) => value > 0);
+  const losses = netPnls.filter((value) => value < 0);
+  const avgWin = average(wins);
+  const avgLoss = average(losses);
+  const payoffRatio = losses.length ? Math.abs(avgWin / avgLoss) : 0;
+  const grossProfit = wins.reduce((sum, value) => sum + value, 0);
+  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
+  const returnsStd = sampleStd(returns);
+  const averageReturn = average(returns);
+  const downside = downsideDeviation(returns);
+  const rollingSharpeSeries = rollingWindow(returns, Math.min(20, Math.max(10, Math.floor(returns.length / 5) || 10)), (window) => {
+    const std = sampleStd(window);
+    return std > 0 ? average(window) / std : 0;
+  });
+  const rollingVolSeries = rollingWindow(returns, Math.min(20, Math.max(10, Math.floor(returns.length / 5) || 10)), (window) => sampleStd(window));
+  const ddSeries = drawdownSeries(returns);
+  const maxDrawdown = maxDrawdownFromReturns(returns);
+  const ddDuration = maxDrawdownDuration(returns);
+  const ui = Math.sqrt(average(ddSeries.map((value) => (value * 100) ** 2)));
+  const var95 = percentile(returns, 0.05);
+  const cvar95 = average(returns.filter((value) => value <= var95));
+  const skew = skewness(returns);
+  const kurt = kurtosis(returns);
+  const tailRatio = Math.abs(percentile(returns, 0.95) / Math.min(-1e-9, percentile(returns, 0.05)));
+  const absAutocorr = autocorrelation(returns.map((value) => Math.abs(value)));
+  const jb = returns.length ? (returns.length / 6) * (skew ** 2 + ((kurt - 3) ** 2) / 4) : 0;
+  const books = buildBookMatrix(trades, returns);
+  const covariance = covarianceMatrix(books.matrix);
+  const correlation = correlationFromCovariance(covariance);
+  const vols = books.matrix.map((series, index) => Math.sqrt(Math.max(covariance[index]?.[index] || 0, 0)));
+  const inverseVolWeights = vols.length
+    ? vols.map((value) => (value > 0 ? 1 / value : 0))
+    : [];
+  const inverseVolTotal = inverseVolWeights.reduce((sum, value) => sum + value, 0) || 1;
+  const weights = inverseVolWeights.map((value) => value / inverseVolTotal);
+  const portfolioReturns = books.matrix.length && weights.length
+    ? books.matrix[0].map((_, index) => books.matrix.reduce((sum, series, seriesIndex) => sum + series[index] * (weights[seriesIndex] || 0), 0))
+    : returns;
+  const portfolioVariance = books.matrix.length > 1
+    ? weights.reduce((outer, weightRow, rowIndex) => outer + weights.reduce((inner, weightCol, colIndex) => inner + weightRow * weightCol * (covariance[rowIndex]?.[colIndex] || 0), 0), 0)
+    : returnsStd ** 2;
+  const portfolioVol = Math.sqrt(Math.max(portfolioVariance, 0));
+  const riskContributions = weights.map((weight, index) => ({ metric: books.labels[index] || `Book ${index + 1}`, value: Number((weight * ((covariance[index]?.[index] || 0) ** 0.5 || 0)).toFixed(4)) }));
+  const averageCorrelation = correlation.length > 1
+    ? average(correlation.flatMap((row, rowIndex) => row.filter((_, colIndex) => rowIndex !== colIndex)))
+    : 0;
+  const diversificationRatio = portfolioVol > 0 && weights.length
+    ? weights.reduce((sum, weight, index) => sum + weight * (vols[index] || 0), 0) / portfolioVol
+    : 1;
+  const effectiveBets = weights.length ? 1 / weights.reduce((sum, value) => sum + value ** 2, 0) : 1;
+  const marketBuckets = new Map<string, number>();
+  closed.forEach((trade) => {
+    const key = String(trade.market_type || 'unknown');
+    marketBuckets.set(key, (marketBuckets.get(key) || 0) + Number(trade.net_pnl || 0));
+  });
+  const setupBuckets = new Map<string, { wins: number; total: number }>();
+  closed.forEach((trade) => {
+    const key = String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified');
+    const bucket = setupBuckets.get(key) || { wins: 0, total: 0 };
+    bucket.total += 1;
+    if (Number(trade.net_pnl || 0) > 0) bucket.wins += 1;
+    setupBuckets.set(key, bucket);
+  });
+  const regimeBase = rollingVolSeries.length ? rollingVolSeries : returns.map((_, index) => sampleStd(returns.slice(Math.max(0, index - 9), index + 1)));
+  const lowCut = percentile(regimeBase, 0.33);
+  const highCut = percentile(regimeBase, 0.66);
+  const regimeSeries = regimeBase.map((value) => (value <= lowCut ? 'LOW' : value >= highCut ? 'HIGH' : 'MEDIUM'));
+  const regimeReturns: Record<string, number[]> = { LOW: [], MEDIUM: [], HIGH: [] };
+  returns.forEach((value, index) => {
+    const regime = regimeSeries[index] || 'MEDIUM';
+    regimeReturns[regime].push(value);
+  });
+  const regimeSharpe = Object.fromEntries(Object.entries(regimeReturns).map(([label, series]) => [label, sampleStd(series) > 0 ? average(series) / sampleStd(series) : 0]));
+  const regimeDrawdown = Object.fromEntries(Object.entries(regimeReturns).map(([label, series]) => [label, maxDrawdownFromReturns(series)]));
+  const regimeSwitchCount = regimeSeries.reduce((count, value, index) => count + (index > 0 && value !== regimeSeries[index - 1] ? 1 : 0), 0);
+  const walkForwardWindows = rollingWindow(returns, Math.min(40, Math.max(20, Math.floor(returns.length / 4) || 20)), (window) => average(window));
+  const walkForwardPassRate = walkForwardWindows.length ? walkForwardWindows.filter((value) => value > 0).length / walkForwardWindows.length : 0;
+  const bootstrapMedian = average(returns);
+  const bootstrapLow = percentile(returns, 0.1);
+  const bootstrapHigh = percentile(returns, 0.9);
+  const stabilityScore = Math.max(0, Math.min(1, 0.55 + walkForwardPassRate * 0.2 + Math.max(0, 0.25 - Math.abs(maxDrawdown)) * 0.5));
+  const positionRisk = Number(closed[closed.length - 1]?.risk_amount || Math.max(500, 100000 * 0.01));
+  const latestEntry = Number(closed[closed.length - 1]?.entry_price || 100);
+  const latestStop = Number(closed[closed.length - 1]?.stop_loss_at_entry || latestEntry * 0.98);
+  const modelSize = Math.abs(latestEntry - latestStop) > 0 ? positionRisk / Math.abs(latestEntry - latestStop) : 0;
+  const capitalAllocations = Object.fromEntries(books.labels.map((label, index) => [label, Number(((weights[index] || 0) * 100000).toFixed(2))]));
+  const participationImpact = Math.abs(average(portfolioReturns)) * 0.15;
+  const stressWorst = Math.min(
+    maxDrawdown,
+    percentile(portfolioReturns, 0.01) * 4,
+    percentile(portfolioReturns, 0.05) * 2.5,
+  );
+  const ruinProbability = Math.max(0, Math.min(1, Math.abs(maxDrawdown) * 1.8 + Math.max(0, -average(portfolioReturns)) * 30));
+  const deployableLeverage = Math.max(0.25, Math.min(3, 1.5 / Math.max(portfolioVol * 25, 0.5)));
+  const survivalScore = Math.max(0, Math.min(1, 1 - ruinProbability * 0.8 - Math.abs(stressWorst) * 1.2));
+  const fragilityScore = Math.max(0, Math.min(1, Math.abs(averageCorrelation) * 0.6 + Math.abs(maxDrawdown) * 0.8));
+
+  return {
+    trade_count: closed.length,
+    win_count: wins.length,
+    loss_count: losses.length,
+    win_rate: closed.length ? wins.length / closed.length : 0,
+    loss_rate: closed.length ? losses.length / closed.length : 0,
+    average_win: avgWin,
+    average_loss: avgLoss,
+    payoff_ratio: payoffRatio,
+    profit_factor: grossLoss > 0 ? grossProfit / grossLoss : 0,
+    expectancy: closed.length ? average(netPnls) : 0,
+    cost_summary: {
+      total_brokerage: trades.reduce((sum, trade) => sum + Number(trade.commission || 0) + Number(trade.fees || 0), 0),
+      total_slippage: trades.reduce((sum, trade) => sum + Number(trade.slippage_cost || 0), 0),
+      total_swaps: trades.reduce((sum, trade) => sum + Number(trade.swaps || 0), 0),
+      total_cost: trades.reduce((sum, trade) => sum + Number(trade.total_cost || Number(trade.commission || 0) + Number(trade.fees || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0)), 0),
+    },
+    adjusted_pnl: {
+      total_net_pnl: trades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0),
+      cumulative_net_curve: closed.reduce<number[]>((rows, trade) => {
+        const previous = rows[rows.length - 1] || 0;
+        rows.push(previous + Number(trade.net_pnl || 0));
+        return rows;
+      }, []),
+    },
+
+    sharpe: returnsStd > 0 ? averageReturn / returnsStd : 0,
+    sortino: downside > 0 ? averageReturn / downside : 0,
+    calmar: maxDrawdown !== 0 ? annualizedGrowth(returns) / Math.abs(maxDrawdown) : 0,
+    cagr: annualizedGrowth(returns),
+    rolling_sharpe: rollingSharpeSeries,
+    net_sharpe: returnsStd > 0 ? averageReturn / returnsStd : 0,
+    net_sortino: downside > 0 ? averageReturn / downside : 0,
+    net_cagr: annualizedGrowth(returns),
+    equity_curve: buildEquitySeries(trades),
+
+    volatility: returnsStd,
+    rolling_volatility: rollingVolSeries,
+    adaptive_rolling_volatility: { latest_volatility: rollingVolSeries[rollingVolSeries.length - 1] || returnsStd, average_volatility: average(rollingVolSeries) || returnsStd, series: rollingVolSeries },
+    max_drawdown: maxDrawdown,
+    rolling_drawdown: ddSeries,
+    drawdown_duration: { max_periods: ddDuration.maxPeriods, current_periods: ddDuration.currentPeriods },
+    ulcer_index: ui,
+    downside_deviation: downside,
+    value_at_risk: var95,
+    conditional_var: cvar95,
+
+    normality_test: { jarque_bera_score: jb, approximately_normal: jb < 6 },
+    skewness: skew,
+    kurtosis: kurt,
+    fat_tail_index: Math.max(0, kurt - 3),
+    tail_ratio: tailRatio,
+    student_t_fit: { degrees_of_freedom: Math.max(3, 12 - Math.min(8, Math.max(0, kurt - 3))), scale: returnsStd },
+    pareto_fit: { alpha: Math.max(1.1, 3 / Math.max(0.25, Math.max(0.2, Math.abs(percentile(returns, 0.1)) * 1000))), threshold: percentile(returns, 0.1) },
+    power_law_exponent: { alpha: Math.max(1.2, 2 + Math.min(3, Math.abs(skew))) },
+    lognormal_test: { positive_sample_ratio: returns.length ? returns.filter((value) => value > 0).length / returns.length : 0 },
+    autocorrelation: autocorrelation(returns),
+    pareto_tail_estimator: { alpha: Math.max(1.2, 2 + Math.min(3, Math.abs(skew))) },
+    power_law_fit: { alpha: Math.max(1.2, 2 + Math.min(3, Math.abs(skew))), fit_quality: Math.max(0, 1 - Math.abs(skew - 1) / 5) },
+
+    volatility_regime: { latest_regime: regimeSeries[regimeSeries.length - 1] || 'MEDIUM', regime_series: regimeSeries },
+    regime_labeling: { regimes: regimeSeries, low_count: regimeSeries.filter((value) => value === 'LOW').length, medium_count: regimeSeries.filter((value) => value === 'MEDIUM').length, high_count: regimeSeries.filter((value) => value === 'HIGH').length },
+    regime_sharpe: regimeSharpe,
+    regime_drawdown: regimeDrawdown,
+    regime_transition_matrix: { switch_count: regimeSwitchCount, persistence_ratio: regimeSeries.length > 1 ? 1 - regimeSwitchCount / (regimeSeries.length - 1) : 1, states: ['LOW', 'MEDIUM', 'HIGH'], matrix: buildRegimeTransitionHeatmap(regimeSeries) },
+    regime_switching: { regime_changes: regimeSwitchCount, switch_rate: regimeSeries.length > 1 ? regimeSwitchCount / (regimeSeries.length - 1) : 0 },
+    volatility_clustering: { abs_return_autocorrelation: absAutocorr },
+    garch_volatility: { latest_volatility: regimeBase[regimeBase.length - 1] || returnsStd },
+    regime_breakdown: { best_regime: Object.entries(regimeSharpe).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] || 'MEDIUM', best_sharpe: Math.max(...Object.values(regimeSharpe).map(Number), 0), worst_drawdown: Math.min(...Object.values(regimeDrawdown).map(Number), 0) },
+    regime_fragility: { fragility_score: Math.max(0, Math.min(1, Math.abs(regimeSwitchCount / Math.max(1, regimeSeries.length)) + Math.abs(Math.min(...Object.values(regimeDrawdown).map(Number), 0)))) },
+
+    walk_forward: { pass_rate: walkForwardPassRate, windows: walkForwardWindows.length },
+    bootstrap: { median_return: bootstrapMedian, ci_low: bootstrapLow, ci_high: bootstrapHigh },
+    block_bootstrap: { median_return: bootstrapMedian * 0.98, ci_low: bootstrapLow * 1.05, ci_high: bootstrapHigh * 0.95 },
+    parameter_sensitivity: { stability_score: Math.max(0, Math.min(1, 1 - returnsStd * 20)) },
+    noise_stability: { stability_score: Math.max(0, Math.min(1, 1 - sampleStd(returns.map((value, index) => value - (rollingVolSeries[index] || 0))) * 10)) },
+    regime_stability: { stability_score: Math.max(0, Math.min(1, 1 - regimeSwitchCount / Math.max(1, regimeSeries.length))) },
+    monte_carlo_stability: { median_terminal: annualizedGrowth(portfolioReturns), worst_case: percentile(portfolioReturns, 0.05) },
+    stability_score: { stability_score: stabilityScore, stability_grade: stabilityScore > 0.8 ? 'HIGH' : stabilityScore > 0.6 ? 'MODERATE' : 'LOW' },
+
+    correlation,
+    covariance_matrix: covariance,
+    portfolio_variance: portfolioVariance,
+    risk_contribution: { top_contributor: riskContributions.sort((a, b) => b.value - a.value)[0]?.metric || 'Book 1', top_contribution: riskContributions.sort((a, b) => b.value - a.value)[0]?.value || 0 },
+    risk_parity: { max_weight: Math.max(...weights, 0), min_weight: Math.min(...weights, 0) },
+    target_volatility: { target: 0.15, realized: portfolioVol },
+    drawdown_correlation: { average_correlation: averageCorrelation },
+    crash_overlap: { overlap_ratio: Math.max(0, Math.min(1, Math.abs(percentile(portfolioReturns, 0.05)) * 20)) },
+    systemic_fragility: { systemic_fragility_score: Math.max(0, Math.min(1, Math.abs(averageCorrelation) * 0.8)) },
+    portfolio_fragility_index: { fragility_index: Math.max(0, Math.min(1, fragilityScore)) },
+    portfolio_preprocessor: { strategy_count: books.labels.length || 1, observation_count: portfolioReturns.length },
+    diversification_ratio: diversificationRatio,
+    effective_number_of_bets: effectiveBets,
+    hierarchical_risk_parity: { max_weight: Math.max(...weights, 0), min_weight: Math.min(...weights, 0) },
+    dynamic_cluster_risk_budgeting: { cluster_count: books.labels.length || 1, max_cluster_weight: Math.max(...weights, 1) },
+    drawdown_aware_capital_allocator: { allocated_capital: 100000 * Math.max(0.4, 1 - Math.abs(maxDrawdown)), drawdown_penalty: Math.abs(maxDrawdown) },
+
+    risk_budgeting: { allocated_books: books.labels.length || 1, top_weight: Math.max(...weights, 1) },
+    kelly: { recommended_fraction: Math.max(0, Math.min(1, payoffRatio * (wins.length / Math.max(1, netPnls.length)) - (losses.length / Math.max(1, netPnls.length)) / Math.max(payoffRatio, 1))), max_fraction: Math.max(...weights, 0) },
+    portfolio_position_sizer: { books_sized: books.labels.length || 1, gross_notional: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || 100000 },
+    position_sizer: { risk_amount: positionRisk, model_size: modelSize },
+    capital_engine: { allocated_capital: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || 100000, active_books: books.labels.length || 1 },
+
+    kill_switch: { triggered: Math.abs(maxDrawdown) > 0.2, threshold: 0.2 },
+    dynamic_throttle: { throttle_level: Math.max(0.25, 1 - Math.abs(maxDrawdown) * 2), active: Math.abs(maxDrawdown) > 0.1 },
+    capital_throttle_engine: { capital_multiplier: Math.max(0.25, 1 - Math.abs(maxDrawdown) * 2) },
+
+    stress_engine: { worst_case_dd: stressWorst, base_drawdown: maxDrawdown, execution_impact_dd: stressWorst * 0.85 },
+    volatility_spike: { current_vol: rollingVolSeries[rollingVolSeries.length - 1] || returnsStd, vol_threshold: percentile(rollingVolSeries.length ? rollingVolSeries : [returnsStd], 0.9), vol_spike: (rollingVolSeries[rollingVolSeries.length - 1] || returnsStd) > percentile(rollingVolSeries.length ? rollingVolSeries : [returnsStd], 0.9) },
+    liquidity_shock: { worst_liquidity_drag: participationImpact * 1.5 },
+    correlation_spike: { stressed_correlation: Math.min(0.95, Math.max(0.1, Math.abs(averageCorrelation) + 0.2)) },
+    crash_simulation: { worst_case_drawdown: Math.min(stressWorst * 1.1, maxDrawdown * 1.4) },
+    stress_scenarios: { tail_scenario_loss: percentile(portfolioReturns, 0.01) },
+    regime_path_generator: { worst_regime_path: Math.min(...Object.values(regimeDrawdown).map(Number), 0) },
+    spread_regime_generator: { max_spread: Math.max(...portfolioReturns.map((value) => Math.abs(value) * 0.08 + 0.0001), 0.0001) },
+    execution_impact_model: { impact_drag: participationImpact },
+
+    fragility_score: { fragility_score: fragilityScore },
+    deployable_leverage: { max_safe_leverage: deployableLeverage },
+    kill_switch_threshold: { threshold: Math.max(0.08, Math.min(0.2, Math.abs(stressWorst) * 1.4)) },
+    capital_throttle_policy: { capital_multiplier: Math.max(0.25, survivalScore) },
+    drawdown_percentile: { drawdown_p95: Math.abs(percentile(ddSeries, 0.05)) },
+    capital_decay: { capital_decay_rate: Math.max(0.01, Math.abs(participationImpact)) },
+    risk_of_ruin: { ruin_probability: ruinProbability, expected_time_to_ruin: (1 - ruinProbability) * Math.max(portfolioReturns.length, 1) },
+    ruin_probability_mc: { mc_ruin_probability: ruinProbability * 1.05 },
+    survival_score: { survival_score: survivalScore },
+    survival_engine: { deployable_survival_score: survivalScore, probability_of_ruin: ruinProbability, survival_grade: survivalScore > 0.9 ? 'INSTITUTIONAL' : survivalScore > 0.75 ? 'ACCEPTABLE' : survivalScore > 0.55 ? 'FRAGILE' : 'NON-DEPLOYABLE' },
+  };
+}
+
+function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, unknown>, overview: OverviewData | undefined) {
+  const trades = overview?.trades || [];
+  const closed = trades.filter((trade) => trade.is_closed);
+  const returns = buildReturns(trades);
+  const book = buildBookMatrix(trades, returns);
+  const covariance = covarianceMatrix(book.matrix);
+  const correlation = correlationFromCovariance(covariance);
+
+  if (sectionTitle === 'Journal Metrics') {
+    const costSummary = (mergedResults.cost_summary as Record<string, unknown>) || {};
+    const dailyNetCurve = buildDailyNetCurve(trades);
+    return (
+      <div className="grid gap-4 lg:grid-cols-3">
+        <VisualCard title="Trade Distribution">
+          <PieMetricChart
+            data={[
+              { name: 'Wins', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
+              { name: 'Losses', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
+              { name: 'Open', value: trades.length - closed.length },
+            ]}
+          />
+        </VisualCard>
+        <VisualCard title="Cost Breakdown">
+          <MetricsBarChart
+            data={[
+              { metric: 'Brokerage', value: Number(costSummary.total_brokerage || 0) },
+              { metric: 'Slippage', value: Number(costSummary.total_slippage || 0) },
+              { metric: 'Swaps', value: Number(costSummary.total_swaps || 0) },
+              { metric: 'Total Cost', value: Number(costSummary.total_cost || 0) },
+            ]}
+          />
+        </VisualCard>
+        <VisualCard title="Daily Net P&L">
+          <GenericTimeSeriesChart
+            data={dailyNetCurve.map((point) => ({ label: point.label, net: point.net }))}
+            series={[{ key: 'net', color: '#0f766e', name: 'Daily Net P&L' }]}
+            valueFormatter={(value) => formatCurrency(value)}
+            tooltipLabelFormatter={(label) => label}
+          />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Performance Metrics') {
+    const equity = (mergedResults.equity_curve as Array<{ t: string; equity: number }>) || buildEquitySeries(trades);
+    const rollingSharpe = toNumberArray(mergedResults.rolling_sharpe);
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Equity Curve">
+          <EquityCurveChart data={equity} />
+        </VisualCard>
+        <VisualCard title="Rolling Sharpe">
+          <GenericTimeSeriesChart
+            data={buildLabeledSeries(rollingSharpe, 'W', 'rolling')}
+            series={[{ key: 'rolling', color: '#1d4ed8', name: 'Rolling Sharpe' }]}
+          />
+        </VisualCard>
+        <VisualCard title="Performance Snapshot">
+          <MetricsBarChart data={[
+            { metric: 'Sharpe', value: Number(extractScalar(mergedResults.sharpe) || 0) },
+            { metric: 'Sortino', value: Number(extractScalar(mergedResults.sortino) || 0) },
+            { metric: 'Calmar', value: Number(extractScalar(mergedResults.calmar) || 0) },
+            { metric: 'CAGR', value: Number(extractScalar(mergedResults.cagr) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Outcome Mix">
+          <PieMetricChart data={[
+            { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
+            { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Risk Metrics') {
+    const rollingVol = toNumberArray(mergedResults.rolling_volatility);
+    const adaptiveSeries = toNumberArray((mergedResults.adaptive_rolling_volatility as Record<string, unknown>)?.series);
+    const drawdowns = toNumberArray(mergedResults.rolling_drawdown);
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Volatility Curves">
+          <GenericTimeSeriesChart
+            data={rollingVol.map((value, index) => ({
+              label: `W${index + 1}`,
+              rolling: normalizeDisplayNumber(value),
+              adaptive: normalizeDisplayNumber(adaptiveSeries[index] ?? value),
+            }))}
+            series={[
+              { key: 'rolling', color: '#0f766e', name: 'Rolling Volatility' },
+              { key: 'adaptive', color: '#7c3aed', name: 'Adaptive Volatility' },
+            ]}
+          />
+        </VisualCard>
+        <VisualCard title="Drawdown Curve">
+          <GenericTimeSeriesChart
+            data={buildLabeledSeries(drawdowns, 'T', 'drawdown')}
+            series={[{ key: 'drawdown', color: '#b91c1c', name: 'Rolling Drawdown' }]}
+          />
+        </VisualCard>
+        <VisualCard title="Risk Snapshot">
+          <MetricsBarChart data={[
+            { metric: 'Volatility', value: Number(extractScalar(mergedResults.volatility) || 0) },
+            { metric: 'Max DD', value: Math.abs(Number(extractScalar(mergedResults.max_drawdown) || 0)) },
+            { metric: 'Ulcer', value: Number(extractScalar(mergedResults.ulcer_index) || 0) },
+            { metric: 'CVaR', value: Math.abs(Number(extractScalar(mergedResults.conditional_var) || 0)) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Risk Shape">
+          <RadarMetricChart data={[
+            { metric: 'Volatility', value: Number(extractScalar(mergedResults.volatility) || 0) },
+            { metric: 'Drawdown', value: Math.abs(Number(extractScalar(mergedResults.max_drawdown) || 0)) },
+            { metric: 'Ulcer', value: Number(extractScalar(mergedResults.ulcer_index) || 0) },
+            { metric: 'Downside', value: Number(extractScalar(mergedResults.downside_deviation) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Distribution Metrics') {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Return Distribution">
+          <HistogramChart values={returns} bins={12} />
+        </VisualCard>
+        <VisualCard title="Distribution Shape">
+          <MetricsBarChart data={[
+            { metric: 'Skew', value: Number(extractScalar(mergedResults.skewness) || 0) },
+            { metric: 'Kurtosis', value: Number(extractScalar(mergedResults.kurtosis) || 0) },
+            { metric: 'Tail', value: Number(extractScalar(mergedResults.tail_ratio) || 0) },
+            { metric: 'AutoCorr', value: Number(extractScalar(mergedResults.autocorrelation) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Regime Metrics') {
+    const labeling = (mergedResults.regime_labeling as Record<string, unknown>) || {};
+    const regimeSeries = Array.isArray(labeling.regimes) ? (labeling.regimes as string[]) : [];
+    const transitionMatrix = ((mergedResults.regime_transition_matrix as Record<string, unknown>)?.matrix as number[][] | undefined) || buildRegimeTransitionHeatmap(regimeSeries);
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Regime Distribution">
+          <MetricsBarChart data={[
+            { metric: 'Low', value: Number(labeling.low_count || 0) },
+            { metric: 'Medium', value: Number(labeling.medium_count || 0) },
+            { metric: 'High', value: Number(labeling.high_count || 0) },
+            { metric: 'Switches', value: Number((mergedResults.regime_switching as Record<string, unknown>)?.regime_changes || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Transition Heatmap">
+          <HeatmapChart labelsX={['LOW', 'MEDIUM', 'HIGH']} labelsY={['LOW', 'MEDIUM', 'HIGH']} matrix={transitionMatrix} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Robustness Metrics') {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Robustness Scores">
+          <MetricsBarChart data={[
+            { metric: 'Walk Fwd', value: Number(extractScalar(mergedResults.walk_forward) || 0) },
+            { metric: 'Bootstrap', value: Number(extractScalar(mergedResults.bootstrap) || 0) },
+            { metric: 'Noise', value: Number(extractScalar(mergedResults.noise_stability) || 0) },
+            { metric: 'Stability', value: Number(extractScalar(mergedResults.stability_score) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Robustness Profile">
+          <RadarMetricChart data={[
+            { metric: 'Walk Fwd', value: Number(extractScalar(mergedResults.walk_forward) || 0) },
+            { metric: 'Param', value: Number(extractScalar(mergedResults.parameter_sensitivity) || 0) },
+            { metric: 'Noise', value: Number(extractScalar(mergedResults.noise_stability) || 0) },
+            { metric: 'Regime', value: Number(extractScalar(mergedResults.regime_stability) || 0) },
+            { metric: 'Monte Carlo', value: Number(extractScalar(mergedResults.monte_carlo_stability) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Portfolio Metrics') {
+    const labels = book.labels.length ? book.labels : ['Book 1'];
+    const matrix = correlation.length ? correlation : [[1]];
+    const vols = book.matrix.map((series, index) => Math.sqrt(Math.max(covariance[index]?.[index] || sampleStd(series) ** 2 || 0, 0)));
+    const inverseVolWeights = vols.length ? vols.map((value) => (value > 0 ? 1 / value : 0)) : [1];
+    const inverseVolTotal = inverseVolWeights.reduce((sum, value) => sum + value, 0) || 1;
+    const weights = labels.map((label, index) => ({
+      name: label,
+      value: Number(((inverseVolWeights[index] || 0) / inverseVolTotal).toFixed(4)),
+      index,
+    }));
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Correlation Heatmap">
+          <HeatmapChart labelsX={labels} labelsY={labels} matrix={matrix} />
+        </VisualCard>
+        <VisualCard title="Portfolio Health">
+          <MetricsBarChart data={[
+            { metric: 'Variance', value: Number(extractScalar(mergedResults.portfolio_variance) || 0) },
+            { metric: 'Div Ratio', value: Number(extractScalar(mergedResults.diversification_ratio) || 0) },
+            { metric: 'Eff Bets', value: Number(extractScalar(mergedResults.effective_number_of_bets) || 0) },
+            { metric: 'Fragility', value: Number(extractScalar(mergedResults.portfolio_fragility_index) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Portfolio Allocation">
+          <PieMetricChart data={weights.map(({ name, value }) => ({ name, value }))} />
+        </VisualCard>
+        <VisualCard title="Risk Contribution">
+          <MetricsBarChart data={labels.map((label, index) => ({ metric: label, value: Number(((weights[index]?.value || 0) * (vols[index] || 0)).toFixed(4)) }))} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Capital Metrics') {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Capital Deployment">
+          <MetricsBarChart data={[
+            { metric: 'Risk Budget', value: Number(extractScalar(mergedResults.risk_budgeting) || 0) },
+            { metric: 'Kelly', value: Number(extractScalar(mergedResults.kelly) || 0) },
+            { metric: 'Pos Size', value: Number(extractScalar(mergedResults.position_sizer) || 0) },
+            { metric: 'Allocated', value: Number(extractScalar(mergedResults.capital_engine) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Capital Profile">
+          <RadarMetricChart data={[
+            { metric: 'Risk Budget', value: Number(extractScalar(mergedResults.risk_budgeting) || 0) },
+            { metric: 'Kelly', value: Number(extractScalar(mergedResults.kelly) || 0) },
+            { metric: 'Position', value: Number(extractScalar(mergedResults.position_sizer) || 0) },
+            { metric: 'Engine', value: Number(extractScalar(mergedResults.capital_engine) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Risk Control Metrics') {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Control Layer">
+          <MetricsBarChart data={[
+            { metric: 'Kill Switch', value: Number(extractScalar(mergedResults.kill_switch) || 0) },
+            { metric: 'Throttle', value: Number(extractScalar(mergedResults.dynamic_throttle) || 0) },
+            { metric: 'Capital Mult', value: Number(extractScalar(mergedResults.capital_throttle_engine) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Control Profile">
+          <RadarMetricChart data={[
+            { metric: 'Kill', value: Number(extractScalar(mergedResults.kill_switch) || 0) },
+            { metric: 'Throttle', value: Number(extractScalar(mergedResults.dynamic_throttle) || 0) },
+            { metric: 'Capital', value: Number(extractScalar(mergedResults.capital_throttle_engine) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Stress Metrics') {
+    const stressEngine = (mergedResults.stress_engine as Record<string, unknown>) || {};
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Stress Envelope">
+          <MetricsBarChart data={[
+            { metric: 'Base DD', value: Math.abs(Number(stressEngine.base_drawdown || 0)) },
+            { metric: 'Impact DD', value: Math.abs(Number(stressEngine.execution_impact_dd || 0)) },
+            { metric: 'Worst DD', value: Math.abs(Number(stressEngine.worst_case_dd || 0)) },
+            { metric: 'Liq Shock', value: Number(extractScalar(mergedResults.liquidity_shock) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Stress Profile">
+          <RadarMetricChart data={[
+            { metric: 'Vol Spike', value: Number(extractScalar(mergedResults.volatility_spike) || 0) },
+            { metric: 'Liquidity', value: Number(extractScalar(mergedResults.liquidity_shock) || 0) },
+            { metric: 'Corr Spike', value: Number(extractScalar(mergedResults.correlation_spike) || 0) },
+            { metric: 'Crash', value: Number(extractScalar(mergedResults.crash_simulation) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  if (sectionTitle === 'Survival Metrics') {
+    return (
+      <div className="grid gap-4 lg:grid-cols-2">
+        <VisualCard title="Survival Layer">
+          <MetricsBarChart data={[
+            { metric: 'Survival', value: Number(extractScalar(mergedResults.survival_score) || 0) },
+            { metric: 'Ruin', value: Number(extractScalar(mergedResults.risk_of_ruin) || 0) },
+            { metric: 'Leverage', value: Number(extractScalar(mergedResults.deployable_leverage) || 0) },
+            { metric: 'Fragility', value: Number(extractScalar(mergedResults.fragility_score) || 0) },
+          ]} />
+        </VisualCard>
+        <VisualCard title="Survival Profile">
+          <RadarMetricChart data={[
+            { metric: 'Survival', value: Number(extractScalar(mergedResults.survival_score) || 0) },
+            { metric: 'Ruin', value: Number(extractScalar(mergedResults.risk_of_ruin) || 0) },
+            { metric: 'Leverage', value: Number(extractScalar(mergedResults.deployable_leverage) || 0) },
+            { metric: 'Fragility', value: Number(extractScalar(mergedResults.fragility_score) || 0) },
+          ]} />
+        </VisualCard>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function VisualCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b]">
+      <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
+      <div className="mt-3 h-[220px]">{children}</div>
+    </div>
+  );
+}
+
+function renderDashboardContracts(contracts: DashboardChartContract[]) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {contracts.map((contract) => (
+        <VisualCard key={`${contract.chart_type}-${contract.title}`} title={contract.title}>
+          {contract.chart_type === 'bar' ? <MetricsBarChart data={(contract.points || []) as Array<{ metric: string; value: number }>} /> : null}
+          {contract.chart_type === 'pie' ? <PieMetricChart data={(contract.points || []) as Array<{ name: string; value: number }>} /> : null}
+          {contract.chart_type === 'radar' ? <RadarMetricChart data={(contract.points || []) as Array<{ metric: string; value: number }>} /> : null}
+          {contract.chart_type === 'timeseries' ? (
+            <GenericTimeSeriesChart
+              data={(contract.points || []) as Array<{ label: string; [key: string]: string | number }>}
+              series={(contract.series || []) as Array<{ key: string; color: string; name?: string }>}
+            />
+          ) : null}
+          {contract.chart_type === 'heatmap' ? (
+            <HeatmapChart labelsX={contract.labels_x || []} labelsY={contract.labels_y || []} matrix={contract.matrix || []} />
+          ) : null}
+          {contract.chart_type === 'histogram' ? <HistogramChart values={contract.values || []} bins={contract.bins || 10} /> : null}
+        </VisualCard>
+      ))}
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  helper,
+}: {
+  label: string;
+  value: string;
+  helper?: string | null;
+}) {
+  return (
+    <div className="h-full min-h-[96px] rounded-[16px] border border-black/10 bg-white px-3 py-3 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
+      <div className="min-w-0">
+        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-black/55 dark:text-white/55">{label}</p>
+        <p className="mt-1.5 text-[1.14rem] font-semibold tracking-[-0.03em] text-black dark:text-white">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function formatCompactCurrencyTick(value: number) {
+  if (!Number.isFinite(value)) return '$0';
+  const abs = Math.abs(value);
+  if (abs >= 1000) {
+    return `${value < 0 ? '-' : ''}$${formatCompactNumber(abs)}`;
+  }
+  return formatCurrency(value);
+}
+
+function formatMetricStatus(value: number, metric: 'net' | 'winRate' | 'profitFactor' | 'expectancy' | 'drawdown' | 'trades') {
+  if (metric === 'net') return value >= 0 ? 'Positive' : 'Negative';
+  if (metric === 'winRate') return value >= 0.5 ? 'Healthy' : value >= 0.4 ? 'Mixed' : 'Watch';
+  if (metric === 'profitFactor') return value >= 1.5 ? 'Strong' : value >= 1 ? 'Healthy' : 'Weak';
+  if (metric === 'expectancy') return value > 0 ? 'Positive' : value === 0 ? 'Flat' : 'Negative';
+  if (metric === 'drawdown') return value <= 0.1 ? 'Controlled' : value <= 0.2 ? 'Watch' : 'Heavy';
+  return value >= 20 ? 'Active' : value > 0 ? 'Light' : 'Empty';
+}
+
+function TopFoldKpiCard({
+  label,
+  value,
+  status,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  status: string;
+  tone?: 'neutral' | 'good' | 'caution' | 'risk';
+}) {
+  const toneClass =
+    tone === 'good'
+      ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-300'
+      : tone === 'caution'
+        ? 'bg-amber-500/12 text-amber-600 dark:text-amber-300'
+        : tone === 'risk'
+          ? 'bg-rose-500/12 text-rose-600 dark:text-rose-300'
+          : 'bg-slate-500/12 text-slate-600 dark:text-slate-300';
+
+  return (
+    <div className="rounded-[22px] border border-black/10 bg-white px-4 py-4 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{label}</p>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${toneClass}`}>{status}</span>
+      </div>
+      <p className="mt-3 text-[1.4rem] font-semibold tracking-[-0.04em] text-black dark:text-white">{value}</p>
+    </div>
+  );
+}
+
+function TopFoldPanel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606] ${className}`.trim()}>
+      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{title}</h3>
+      <div className="mt-4">{children}</div>
+    </div>
+  );
+}
+
+function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string; net: number; cumulative: number }> }) {
+  return (
+    <ChartFrame className="h-[320px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+          <defs>
+            <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0f766e" stopOpacity={0.32} />
+              <stop offset="100%" stopColor="#0f766e" stopOpacity={0.04} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.16)" vertical={false} />
+          <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} />
+          <YAxis
+            stroke="#64748b"
+            tickLine={false}
+            axisLine={false}
+            width={72}
+            tickFormatter={(value) => formatCompactCurrencyTick(Number(value))}
+          />
+          <Tooltip
+            formatter={(value: number, name: string) => [formatCurrency(Number(value)), name === 'cumulative' ? 'Cumulative Net P&L' : 'Daily Net P&L']}
+            labelFormatter={(_, payload) => payload?.[0]?.payload?.date ? formatDate(String(payload[0].payload.date)) : ''}
+            contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
+          />
+          <Area type="monotone" dataKey="cumulative" stroke="#0f766e" strokeWidth={3} fill="url(#pnlFill)" />
+        </AreaChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
+}
+
+function ComparisonBars({
+  title,
+  items,
+  formatter,
+}: {
+  title: string;
+  items: Array<{ label: string; value: number; tone: 'good' | 'risk' | 'neutral' }>;
+  formatter: (value: number) => string;
+}) {
+  const maxValue = Math.max(...items.map((item) => Math.abs(item.value)), 1);
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/50 dark:text-white/50">{title}</p>
+      <div className="mt-3 space-y-3">
+        {items.map((item) => {
+          const width = `${Math.max(10, (Math.abs(item.value) / maxValue) * 100)}%`;
+          const toneClass = item.tone === 'good' ? 'bg-emerald-500' : item.tone === 'risk' ? 'bg-rose-500' : 'bg-slate-500';
+          return (
+            <div key={item.label}>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-black/75 dark:text-white/75">{item.label}</span>
+                <span className="font-semibold text-black dark:text-white">{formatter(item.value)}</span>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-black/[0.06] dark:bg-white/[0.08]">
+                <div className={`h-2 rounded-full ${toneClass}`} style={{ width }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function minutesBetween(start?: string | null, end?: string | null): number {
+  if (!start || !end) return 0;
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
+  if (!Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime <= startTime) return 0;
+  return Math.max(0, Math.round((endTime - startTime) / 60000));
+}
+
+function longestStreak(values: number[], predicate: (value: number) => boolean): number {
+  let current = 0;
+  let max = 0;
+  values.forEach((value) => {
+    if (predicate(value)) {
+      current += 1;
+      max = Math.max(max, current);
+    } else {
+      current = 0;
+    }
+  });
+  return max;
+}
+
+function classifyBucket(value: number, low: number, high: number): 'low' | 'medium' | 'high' {
+  if (value <= low) return 'low';
+  if (value >= high) return 'high';
+  return 'medium';
+}
+
+function pnlBucket(value: number, low: number, high: number): string {
+  if (Math.abs(value) < 1e-9) return 'flat';
+  if (value > 0) return value >= high ? 'big_profit' : 'profit';
+  return Math.abs(value) >= Math.abs(low) ? 'big_loss' : 'loss';
+}
+
+function ratioBucket(value: number): string {
+  if (value < 1) return 'under_1';
+  if (value < 2) return '1_to_2';
+  return '2_plus';
+}
+
+function rMultipleBucket(value: number): string {
+  if (value < 0) return 'loss';
+  if (Math.abs(value) < 1e-9) return 'flat';
+  if (value < 1) return '0_to_1';
+  if (value < 2) return '1_to_2';
+  return '2_plus';
+}
+
+function matchesNumericRange(value: number, filter: string): boolean {
+  if (filter === 'all') return true;
+  if (!Number.isFinite(value)) return false;
+  const normalized = filter.replace(/\s+/g, '');
+  const [rawMin, rawMax] = normalized.split(':');
+  const min = rawMin === '' || rawMin == null ? Number.NEGATIVE_INFINITY : Number(rawMin);
+  const max = rawMax === '' || rawMax == null ? Number.POSITIVE_INFINITY : Number(rawMax);
+  if ((!Number.isFinite(min) && min !== Number.NEGATIVE_INFINITY) || (!Number.isFinite(max) && max !== Number.POSITIVE_INFINITY)) {
+    return true;
+  }
+  return value >= min && value <= max;
+}
+
+function matchesBucketOrCustom(value: number, filter: string, low: number, high: number): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'low' || filter === 'medium' || filter === 'high') {
+    return classifyBucket(value, low, high) === filter;
+  }
+  if (filter.startsWith('custom:')) {
+    return matchesNumericRange(value, filter.slice('custom:'.length));
+  }
+  return true;
+}
+
+export function DashboardScreen() {
+  const accountId = usePrototypeStore((state) => state.accountId);
+  const dashboardGroupOrder = usePrototypeStore((state) => state.dashboardGroupOrder);
+  const dashboardMetricGroup = usePrototypeStore((state) => state.dashboardMetricGroup);
+  const dashboardMetricSize = usePrototypeStore((state) => state.dashboardMetricSize);
+  const setDashboardGroupOrder = usePrototypeStore((state) => state.setDashboardGroupOrder);
+  const moveMetricToGroup = usePrototypeStore((state) => state.moveMetricToGroup);
+  const cycleMetricSize = usePrototypeStore((state) => state.cycleMetricSize);
+  const resetDashboardLayout = usePrototypeStore((state) => state.resetDashboardLayout);
+  const dashboardTopWidgetVisibility = usePrototypeStore((state) => state.dashboardTopWidgetVisibility);
+  const toggleTopWidget = usePrototypeStore((state) => state.toggleTopWidget);
+  const dashboardFilters = usePrototypeStore((state) => state.dashboardFilters);
+  const setDashboardFilters = usePrototypeStore((state) => state.setDashboardFilters);
+  const dashboardFilterPresets = usePrototypeStore((state) => state.dashboardFilterPresets);
+  const saveDashboardFilterPreset = usePrototypeStore((state) => state.saveDashboardFilterPreset);
+  const deleteDashboardFilterPreset = usePrototypeStore((state) => state.deleteDashboardFilterPreset);
+  const { data, isLoading, error } = useQuery(['prototype-overview', accountId], () => fetchOverview(accountId as string), {
+    enabled: Boolean(accountId),
+  });
+  const { data: chartCatalog } = useQuery(['prototype-chart-catalog'], fetchChartCatalog);
+  const [widgetModalOpen, setWidgetModalOpen] = useState(false);
+  const [selectedPresetName, setSelectedPresetName] = useState('');
+  const now = useMemo(() => new Date(), []);
+  const {
+    strategyFilter,
+    marketFilter,
+    symbolFilter,
+    sideFilter,
+    mistakeFilter,
+    datePreset,
+    timeFilter,
+    dayFilter,
+    spreadFilter,
+    slippageFilter,
+    holdTimeFilter,
+    exitReasonFilter,
+    quantityFilter,
+    lotSizeFilter,
+    leverageFilter,
+    costFilter,
+    netPnlFilter,
+    riskAmountFilter,
+    rrrFilter,
+    rMultipleFilter,
+    confidenceFilter,
+    emotionFilter,
+    probabilityFilter,
+    closedEarlyFilter,
+    statusFilter,
+  } = dashboardFilters;
+
+  const thresholdSource = useMemo(() => data?.trades || [], [data]);
+  const spreadThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.entry_spread || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const slippageThresholds = useMemo(() => {
+    const values = thresholdSource
+      .map((trade) => Math.abs(Number(trade.slippage_at_entry || 0)) + Math.abs(Number(trade.slippage_at_exit || 0)))
+      .filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const quantityThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.quantity || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const costThresholds = useMemo(() => {
+    const values = thresholdSource
+      .map((trade) => Number(trade.fees || 0) + Number(trade.commission || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0))
+      .filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const pnlThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.net_pnl || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const riskThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.risk_amount || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const rrrThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.rrr_at_entry || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const rMultipleThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.r_multiple || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+  const confidenceThresholds = useMemo(() => {
+    const values = thresholdSource.map((trade) => Number(trade.confidence_score || 0)).filter((value) => Number.isFinite(value));
+    return { low: percentile(values, 0.33), high: percentile(values, 0.66) };
+  }, [thresholdSource]);
+
+  const filteredData = useMemo<OverviewData | undefined>(() => {
+    if (!data) return data;
+    const filteredTrades = data.trades.filter((trade) => {
+      const strategyName = String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified');
+      const matchesStrategy = strategyFilter === 'all' || strategyName === strategyFilter;
+      const matchesMarket = marketFilter === 'all' || String(trade.market_type || 'unknown') === marketFilter;
+      const matchesSymbol = symbolFilter === 'all' || String(trade.symbol || 'unknown') === symbolFilter;
+      const matchesSide = sideFilter === 'all' || String(trade.side || 'unknown') === sideFilter;
+      const violations = trade.rule_violations_snapshot || [];
+      const matchesMistake =
+        mistakeFilter === 'all'
+        || (mistakeFilter === 'none' ? violations.length === 0 : violations.includes(mistakeFilter));
+      const tradeStatus = trade.is_closed ? 'closed' : 'open';
+      const matchesStatus = statusFilter === 'all' || tradeStatus === statusFilter;
+      const matchesDate = matchesDatePreset(getTradeLocalDate(trade), datePreset, now);
+      const pnl = Number(trade.net_pnl || 0);
+      const tradeHour = trade.entry_hour != null ? String(trade.entry_hour) : String(new Date(trade.entry_time).getHours());
+      const matchesTime = timeFilter === 'all' || tradeHour === timeFilter;
+      const matchesDay = dayFilter === 'all' || String(trade.entry_day_of_week || 'Unknown') === dayFilter;
+      const holdMinutes = minutesBetween(trade.entry_time, trade.exit_time);
+      const holdBucket =
+        holdMinutes < 15 ? 'under_15m'
+          : holdMinutes < 60 ? '15m_1h'
+            : holdMinutes < 240 ? '1h_4h'
+              : '4h_plus';
+      const matchesHoldTime = holdTimeFilter === 'all' || (trade.is_closed && holdBucket === holdTimeFilter);
+      const totalSlippage = Math.abs(Number(trade.slippage_at_entry || 0)) + Math.abs(Number(trade.slippage_at_exit || 0));
+      const totalCost = Number(trade.fees || 0) + Number(trade.commission || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0);
+      const matchesSpread = matchesBucketOrCustom(Number(trade.entry_spread || 0), spreadFilter, spreadThresholds.low, spreadThresholds.high);
+      const matchesSlippage = matchesBucketOrCustom(totalSlippage, slippageFilter, slippageThresholds.low, slippageThresholds.high);
+      const matchesExitReason = exitReasonFilter === 'all' || String(trade.exit_reason || '') === exitReasonFilter;
+      const matchesQuantity = matchesBucketOrCustom(Number(trade.quantity || 0), quantityFilter, quantityThresholds.low, quantityThresholds.high);
+      const matchesLotSize = lotSizeFilter === 'all' || String(Number(trade.lot_size || 0)) === lotSizeFilter;
+      const matchesLeverage = leverageFilter === 'all' || String(Number(trade.leverage_used || 0)) === leverageFilter;
+      const matchesCost = matchesBucketOrCustom(totalCost, costFilter, costThresholds.low, costThresholds.high);
+      const matchesNetPnl = matchesBucketOrCustom(pnl, netPnlFilter, pnlThresholds.low, pnlThresholds.high);
+      const matchesRiskAmount = matchesBucketOrCustom(Number(trade.risk_amount || 0), riskAmountFilter, riskThresholds.low, riskThresholds.high);
+      const matchesRrr = matchesBucketOrCustom(Number(trade.rrr_at_entry || 0), rrrFilter, rrrThresholds.low, rrrThresholds.high);
+      const matchesRMultiple = matchesBucketOrCustom(Number(trade.r_multiple || 0), rMultipleFilter, rMultipleThresholds.low, rMultipleThresholds.high);
+      const matchesConfidence = matchesBucketOrCustom(Number(trade.confidence_score || 0), confidenceFilter, confidenceThresholds.low, confidenceThresholds.high);
+      const matchesEmotion = emotionFilter === 'all' || String(trade.emotion_tag || '') === emotionFilter;
+      const matchesProbability = probabilityFilter === 'all' || String(trade.probability_bucket || '') === probabilityFilter;
+      const matchesClosedEarly = closedEarlyFilter === 'all' || (closedEarlyFilter === 'yes' ? trade.closed_before_plan : !trade.closed_before_plan);
+      return matchesStrategy && matchesMarket && matchesSymbol && matchesSide && matchesMistake && matchesStatus && matchesDate && matchesTime && matchesDay && matchesHoldTime && matchesSpread && matchesSlippage && matchesExitReason && matchesQuantity && matchesLotSize && matchesLeverage && matchesCost && matchesNetPnl && matchesRiskAmount && matchesRrr && matchesRMultiple && matchesConfidence && matchesEmotion && matchesProbability && matchesClosedEarly;
+    });
+    return {
+      trades: filteredTrades,
+      sessionDailyTotals: data.sessionDailyTotals,
+      missedOpportunityCount: data.missedOpportunityCount,
+    };
+  }, [data, marketFilter, sideFilter, statusFilter, strategyFilter, symbolFilter, mistakeFilter, datePreset, now, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter, spreadThresholds, slippageThresholds, quantityThresholds, costThresholds, pnlThresholds, riskThresholds, rrrThresholds, rMultipleThresholds, confidenceThresholds]);
+
+  const metricPayload = useMemo(() => buildMetricPayload(filteredData), [filteredData]);
+  const { data: metricRun, isLoading: metricsLoading } = useQuery(
+    ['prototype-dashboard-metrics', accountId, filteredData?.trades?.length, filteredData?.sessionDailyTotals?.length, filteredData?.missedOpportunityCount, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
+    () => runMetricComputation({ data: metricPayload, phase: 'research' }),
+    { enabled: Boolean(filteredData?.trades?.length) },
+  );
+
+  const metrics = useMemo(() => {
+    const trades = filteredData?.trades || [];
+    const closed = trades.filter((trade) => trade.is_closed);
+    const closedPnls = closed.map((trade) => Number(trade.net_pnl || 0));
+    const returns = buildReturns(trades);
+    const winTrades = closed.filter((trade) => Number(trade.net_pnl || 0) > 0);
+    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
+    const wins = winTrades.length;
+    const losses = lossTrades.length;
+    const avgWin = average(winTrades.map((trade) => Number(trade.net_pnl || 0)));
+    const avgLoss = average(lossTrades.map((trade) => Number(trade.net_pnl || 0)));
+    const grossProfit = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
+    const grossLoss = Math.abs(lossTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0));
+    const totalNet = trades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
+    const tradeDays = new Set(trades.map((trade) => trade.entry_date || trade.entry_time?.slice(0, 10)).filter(Boolean));
+    const totalMinutes = (filteredData?.sessionDailyTotals || [])
+      .filter((row) => tradeDays.size === 0 || tradeDays.has(row.day))
+      .reduce((sum, row) => sum + Number(row.total_platform_time_minutes || 0), 0);
+    const preTradeCoverage = trades.length ? trades.filter((trade) => trade.pre_trade_capture && Object.keys(trade.pre_trade_capture || {}).length > 0).length / trades.length : 0;
+    const postTradeCoverage = trades.length ? trades.filter((trade) => trade.post_trade_capture && Object.keys(trade.post_trade_capture || {}).length > 0).length / trades.length : 0;
+    const checklistCoverage = trades.length ? trades.filter((trade) => (trade.checklist_before || []).length > 0 || (trade.checklist_after || []).length > 0).length / trades.length : 0;
+    const ruleViolationCount = trades.reduce((sum, trade) => sum + (trade.rule_violations_snapshot || []).length, 0);
+    const probabilityCoverage = trades.length ? trades.filter((trade) => trade.probability_bucket).length / trades.length : 0;
+    const decisionReadiness = trades.length ? trades.filter((trade) => trade.strategy_tag || trade.strategy || trade.setup_name).length / trades.length : 0;
+    const avgWinHoldMinutes = average(winTrades.map((trade) => minutesBetween(trade.entry_time, trade.exit_time)));
+    const avgLossHoldMinutes = average(lossTrades.map((trade) => minutesBetween(trade.entry_time, trade.exit_time)));
+    const topWin = winTrades.length ? Math.max(...winTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
+    const topLoss = lossTrades.length ? Math.min(...lossTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
+    const winStreak = longestStreak(closedPnls, (value) => value > 0);
+    const lossStreak = longestStreak(closedPnls, (value) => value < 0);
+    const sizedTrades = trades.filter((trade) => Number.isFinite(Number(trade.quantity || trade.lot_size || 0)) && Number(trade.quantity || trade.lot_size || 0) > 0);
+    const avgSize = average(sizedTrades.map((trade) => Number(trade.quantity || trade.lot_size || 0)));
+    const dayVolume = new Map<string, number>();
+    trades.forEach((trade) => {
+      const dayKey = trade.entry_date || trade.entry_time?.slice(0, 10);
+      if (!dayKey) return;
+      dayVolume.set(dayKey, (dayVolume.get(dayKey) || 0) + Number(trade.quantity || trade.lot_size || 0));
+    });
+    const avgDailyVolume = average(Array.from(dayVolume.values()));
+    const expectancy = closed.length ? average(closedPnls) : 0;
+    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+
+    return {
+      tradeCount: trades.length,
+      winCount: wins,
+      lossCount: losses,
+      winRate: closed.length ? wins / closed.length : 0,
+      totalNet,
+      maxDrawdown: Math.abs(maxDrawdownFromReturns(returns)),
+      totalMinutes,
+      missedCount: filteredData?.missedOpportunityCount || 0,
+      preTradeCoverage,
+      postTradeCoverage,
+      checklistCoverage,
+      ruleViolationCount,
+      probabilityCoverage,
+      decisionReadiness,
+      expectancy,
+      profitFactor,
+      avgWin,
+      avgLoss,
+      avgWinHoldMinutes,
+      avgLossHoldMinutes,
+      topWin,
+      topLoss,
+      winStreak,
+      lossStreak,
+      avgDailyVolume,
+      avgSize,
+    };
+  }, [filteredData]);
+
+  const dashboardResults = metricRun?.results || {};
+  const derivedMetrics = useMemo(() => buildDerivedMetrics(filteredData), [filteredData]);
+  const sectionMap = useMemo(() => new Map(defaultMetricSections.map((section) => [section.title, section])), []);
+  const displayedSections = useMemo(() => {
+    const allKeys = defaultMetricSections.flatMap((section) => section.keys);
+    const assignment = Object.fromEntries(
+      allKeys.map((key) => {
+        const defaultSection = defaultMetricSections.find((section) => section.keys.includes(key))?.title || defaultDashboardGroupOrder[0];
+        return [key, dashboardMetricGroup[key] || defaultSection];
+      }),
+    ) as Record<string, string>;
+    const legacyDefaultOrder = [
+      'Journal Metrics',
+      'Performance Metrics',
+      'Risk Metrics',
+      'Distribution Metrics',
+      'Regime Metrics',
+      'Robustness Metrics',
+      'Portfolio Metrics',
+      'Capital Metrics',
+      'Risk Control Metrics',
+      'Stress Metrics',
+      'Survival Metrics',
+    ];
+    const titles =
+      dashboardGroupOrder.length && dashboardGroupOrder.join('|') !== legacyDefaultOrder.join('|')
+        ? dashboardGroupOrder
+        : defaultDashboardGroupOrder;
+    return titles
+      .map((title) => ({
+        title,
+        keys: allKeys.filter((key) => assignment[key] === title),
+      }))
+      .filter((section) => section.keys.length > 0 || sectionMap.has(section.title));
+  }, [dashboardGroupOrder, dashboardMetricGroup, sectionMap]);
+  const mergedResults = useMemo(
+    () =>
+      Object.fromEntries(
+        Array.from(new Set(displayedSections.flatMap((section) => section.keys).concat(['equity_curve']))).map((key) => [
+          key,
+          preferDerivedKeys.has(key) ? derivedMetrics[key] ?? dashboardResults[key] : dashboardResults[key] ?? derivedMetrics[key],
+        ]),
+      ),
+    [dashboardResults, derivedMetrics, displayedSections],
+  );
+  const { data: chartContracts } = useQuery(
+    ['prototype-dashboard-chart-contracts', accountId, filteredData?.trades?.length, filteredData?.sessionDailyTotals?.length, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
+    () =>
+      fetchDashboardChartContracts({
+        account_id: accountId as string,
+        overview: filteredData as OverviewData,
+        metrics: mergedResults,
+        filters: dashboardFilters,
+      }),
+    { enabled: Boolean(accountId && filteredData) },
+  );
+
+  const strategyOptions = useMemo(
+    () => Array.from(new Set((data?.trades || []).map((trade) => String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified')))).sort(),
+    [data],
+  );
+  const symbolOptions = useMemo(() => Array.from(new Set((data?.trades || []).map((trade) => String(trade.symbol || 'unknown')))).sort(), [data]);
+  const sideOptions = useMemo(() => Array.from(new Set((data?.trades || []).map((trade) => String(trade.side || 'unknown')))).sort(), [data]);
+  const mistakeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (data?.trades || []).flatMap((trade) => (trade.rule_violations_snapshot || []).map((item) => String(item))),
+        ),
+      ).sort(),
+    [data],
+  );
+  const pnlCurve = useMemo(() => buildDailyNetCurve(filteredData?.trades || []), [filteredData]);
+  const timePatternInsights = useMemo(() => buildTimePatternInsights(filteredData?.trades || []), [filteredData]);
+
+  if (isLoading) {
+    return <p className="text-sm text-gray-600 dark:text-slate-400">Loading dashboard…</p>;
+  }
+
+  if (error instanceof Error) {
+    return <p className="rounded-[20px] border border-rose-500/20 bg-rose-50 px-5 py-4 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{error.message}</p>;
+  }
+
+  const widgetCatalog = chartCatalog?.top_widgets || [
+    { key: 'trades', label: 'Total Completed Trades', helper: 'All records in the current filtered view.' },
+    { key: 'net_pnl', label: 'Net Return $', helper: 'After all costs.' },
+    { key: 'win_rate', label: 'Wins Percent', helper: 'Closed trades only.' },
+    { key: 'platform_time', label: 'Platform Time', helper: 'Tracked session time.' },
+    { key: 'missed_opportunities', label: 'Missed Opportunities', helper: 'Recorded but unexecuted setups.' },
+  ];
+  const topWidgetDefinitions: Record<string, { value: string; tone?: 'default' | 'success' | 'accent' }> = {
+    trades: { value: formatCompactNumber(metrics.tradeCount) },
+    net_pnl: { value: formatCurrency(metrics.totalNet), tone: metrics.totalNet >= 0 ? 'success' as const : 'default' as const },
+    win_rate: { value: formatPercent(metrics.winRate), tone: 'accent' as const },
+    platform_time: { value: formatMinutes(metrics.totalMinutes) },
+    missed_opportunities: { value: String(metrics.missedCount) },
+    expectancy: { value: formatCurrency(metrics.expectancy) },
+    profit_factor: { value: formatNumber(metrics.profitFactor) },
+    avg_win: { value: formatCurrency(metrics.avgWin), tone: metrics.avgWin > 0 ? 'success' as const : 'default' as const },
+    avg_loss: { value: formatCurrency(metrics.avgLoss) },
+    avg_win_hold: { value: formatMinutes(metrics.avgWinHoldMinutes) },
+    avg_loss_hold: { value: formatMinutes(metrics.avgLossHoldMinutes) },
+    top_win: { value: formatCurrency(metrics.topWin), tone: metrics.topWin > 0 ? 'success' as const : 'default' as const },
+    top_loss: { value: formatCurrency(metrics.topLoss) },
+    win_streak: { value: String(metrics.winStreak) },
+    loss_streak: { value: String(metrics.lossStreak) },
+    avg_daily_volume: { value: formatCompactNumber(metrics.avgDailyVolume) },
+    avg_size: { value: formatCompactNumber(metrics.avgSize) },
+    pre_trade_coverage: { value: formatPercent(metrics.preTradeCoverage) },
+    post_trade_coverage: { value: formatPercent(metrics.postTradeCoverage) },
+    checklist_coverage: { value: formatPercent(metrics.checklistCoverage) },
+    rule_violations: { value: String(metrics.ruleViolationCount) },
+    probability_coverage: { value: formatPercent(metrics.probabilityCoverage) },
+    decision_readiness: { value: formatPercent(metrics.decisionReadiness) },
+  };
+
+  const topWidgets = widgetCatalog
+    .filter((widget) => widget.key in topWidgetDefinitions)
+    .filter((widget) => dashboardTopWidgetVisibility[widget.key] !== false)
+    .map((widget) => ({
+      key: widget.key,
+      label: widget.label,
+      helper: widget.helper || '',
+      value: topWidgetDefinitions[widget.key].value,
+      tone: topWidgetDefinitions[widget.key].tone,
+    }));
+
+  const heroCards = [
+    dashboardTopWidgetVisibility.net_pnl !== false
+      ? {
+          key: 'net_pnl',
+          label: 'Net P&L',
+          value: formatCurrency(metrics.totalNet),
+          status: formatMetricStatus(metrics.totalNet, 'net'),
+          tone: metrics.totalNet >= 0 ? 'good' : 'risk',
+        }
+      : null,
+    dashboardTopWidgetVisibility.win_rate !== false
+      ? {
+          key: 'win_rate',
+          label: 'Win Rate',
+          value: formatPercent(metrics.winRate),
+          status: formatMetricStatus(metrics.winRate, 'winRate'),
+          tone: metrics.winRate >= 0.5 ? 'good' : metrics.winRate >= 0.4 ? 'caution' : 'risk',
+        }
+      : null,
+    dashboardTopWidgetVisibility.profit_factor !== false
+      ? {
+          key: 'profit_factor',
+          label: 'Profit Factor',
+          value: formatNumber(metrics.profitFactor),
+          status: formatMetricStatus(metrics.profitFactor, 'profitFactor'),
+          tone: metrics.profitFactor >= 1.5 ? 'good' : metrics.profitFactor >= 1 ? 'caution' : 'risk',
+        }
+      : null,
+    dashboardTopWidgetVisibility.expectancy !== false
+      ? {
+          key: 'expectancy',
+          label: 'Expectancy',
+          value: formatCurrency(metrics.expectancy),
+          status: formatMetricStatus(metrics.expectancy, 'expectancy'),
+          tone: metrics.expectancy > 0 ? 'good' : metrics.expectancy === 0 ? 'caution' : 'risk',
+        }
+      : null,
+    {
+      key: 'max_drawdown',
+      label: 'Max Drawdown',
+      value: formatPercent(metrics.maxDrawdown),
+      status: formatMetricStatus(metrics.maxDrawdown, 'drawdown'),
+      tone: metrics.maxDrawdown <= 0.1 ? 'good' : metrics.maxDrawdown <= 0.2 ? 'caution' : 'risk',
+    },
+    dashboardTopWidgetVisibility.trades !== false
+      ? {
+          key: 'trades',
+          label: 'Trade Count',
+          value: formatCompactNumber(metrics.tradeCount),
+          status: formatMetricStatus(metrics.tradeCount, 'trades'),
+          tone: 'neutral',
+        }
+      : null,
+  ].filter(Boolean) as Array<{ key: string; label: string; value: string; status: string; tone: 'neutral' | 'good' | 'caution' | 'risk' }>;
+
+  const behaviorWidgetOrder = [
+    'avg_win_hold',
+    'avg_loss_hold',
+    'top_win',
+    'top_loss',
+    'win_streak',
+    'loss_streak',
+    'platform_time',
+    'missed_opportunities',
+    'avg_daily_volume',
+    'avg_size',
+    'pre_trade_coverage',
+    'post_trade_coverage',
+    'checklist_coverage',
+    'rule_violations',
+    'probability_coverage',
+    'decision_readiness',
+  ];
+
+  const behaviorWidgets = behaviorWidgetOrder
+    .map((key) => topWidgets.find((widget) => widget.key === key))
+    .filter(Boolean)
+    .slice(0, 6) as typeof topWidgets;
+
+  return (
+    <div className="space-y-8 text-black dark:text-white">
+      <section className="sticky top-0 z-20 -mx-5 border-y border-black bg-black px-2 py-1.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white dark:bg-white dark:text-black md:-mx-8 xl:-mx-10">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={resetDashboardLayout}
+            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          >
+            Reset Dashboard Layout
+          </button>
+          <button
+            type="button"
+            onClick={() => setWidgetModalOpen(true)}
+            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          >
+            Select Upper Widgets
+          </button>
+          <button
+            type="button"
+            onClick={() => setDashboardFilters({
+              ...defaultDashboardFilters,
+            })}
+            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          >
+            Reset Filters
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const name = window.prompt('Preset name');
+              if (name) saveDashboardFilterPreset(name, dashboardFilters);
+            }}
+            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          >
+            Save Preset
+          </button>
+        </div>
+
+        {dashboardFilterPresets.length ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <div className="min-w-[220px]">
+              <FilterSelect
+                label="Saved Presets"
+                value={selectedPresetName}
+                onChange={setSelectedPresetName}
+                options={dashboardFilterPresets.map((preset) => preset.name)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const preset = dashboardFilterPresets.find((item) => item.name === selectedPresetName);
+                if (preset) setDashboardFilters(preset.filters);
+              }}
+              className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            >
+              Apply Preset
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!selectedPresetName) return;
+                deleteDashboardFilterPreset(selectedPresetName);
+                setSelectedPresetName('');
+              }}
+              className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            >
+              Delete Preset
+            </button>
+          </div>
+        ) : null}
+
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-6">
+        {heroCards.map((card) => (
+          <TopFoldKpiCard key={card.key} label={card.label} value={card.value} status={card.status} tone={card.tone} />
+        ))}
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
+        <TopFoldPanel title="Performance Trend">
+          {pnlCurve.length ? (
+            <FriendlyPnlChart data={pnlCurve} />
+          ) : (
+            <p className="rounded-[18px] border border-dashed border-black/10 px-4 py-8 text-sm text-black/60 dark:border-white/10 dark:text-white/60">
+              No closed-trade history yet for a P&amp;L curve.
+            </p>
+          )}
+        </TopFoldPanel>
+
+        <TopFoldPanel title="Trade Outcomes">
+          <div className="grid gap-5">
+            <ComparisonBars
+              title="Avg Win vs Avg Loss"
+              items={[
+                { label: 'Avg Win', value: metrics.avgWin, tone: 'good' },
+                { label: 'Avg Loss', value: Math.abs(metrics.avgLoss), tone: 'risk' },
+              ]}
+              formatter={(value) => formatCurrency(value)}
+            />
+            <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/50 dark:text-white/50">Wins vs Losses</p>
+                <div className="mt-3">
+                  <PieMetricChart
+                    data={[
+                      { name: 'Wins', value: metrics.winCount },
+                      { name: 'Losses', value: metrics.lossCount },
+                    ]}
+                    colors={['#10b981', '#ef4444']}
+                  />
+                </div>
+              </div>
+              <ComparisonBars
+                title="Trade Counts"
+                items={[
+                  { label: 'Wins', value: metrics.winCount, tone: 'good' },
+                  { label: 'Losses', value: metrics.lossCount, tone: 'risk' },
+                ]}
+                formatter={(value) => formatNumber(value)}
+              />
+            </div>
+          </div>
+        </TopFoldPanel>
+      </section>
+
+      {behaviorWidgets.length ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          {behaviorWidgets.map((widget) => (
+            <StatCard key={widget.key} label={widget.label} value={widget.value} helper={widget.helper} tone={widget.tone} />
+          ))}
+        </section>
+      ) : null}
+
+      <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606]">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-black dark:text-white">Time Pattern Insights</h2>
+            <p className="mt-1 text-sm text-black/55 dark:text-white/55">
+              Where the trading day is working for you, and where it is not.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          <VisualCard title="P&amp;L by Weekday">
+            <MetricsBarChart
+              data={timePatternInsights.weekdayPnlBars}
+              valueFormatter={(value) => formatCurrency(value)}
+              barColor="#0f766e"
+            />
+          </VisualCard>
+          <VisualCard title="P&amp;L by Hour">
+            <MetricsBarChart
+              data={timePatternInsights.hourPnlBars}
+              valueFormatter={(value) => formatCurrency(value)}
+              labelFormatter={(label) => label.replace(':00', '')}
+              barColor="#1d4ed8"
+            />
+          </VisualCard>
+          <VisualCard title="Trade Frequency Heatmap">
+            <HeatmapChart
+              labelsX={timePatternInsights.heatmapX}
+              labelsY={timePatternInsights.heatmapY}
+              matrix={timePatternInsights.tradeCountHeatmap}
+            />
+          </VisualCard>
+        </div>
+      </section>
+
+      <section className="grid gap-6">
+        {metricsLoading ? <p className="text-sm text-black/70 dark:text-white/70">Loading metric catalog…</p> : null}
+
+        {displayedSections.map((section, sectionIndex) => {
+          const populated = section.keys.filter((key) => mergedResults[key] != null).length;
+          return (
+            <div
+              key={section.title}
+              draggable
+              onDragStart={(event) => event.dataTransfer.setData('text/group-index', String(sectionIndex))}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (event.dataTransfer.types.includes('text/metric-key')) {
+                  event.dataTransfer.dropEffect = 'move';
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const metricKey = event.dataTransfer.getData('text/metric-key');
+                const sourceIndex = Number(event.dataTransfer.getData('text/group-index'));
+                if (metricKey) {
+                  moveMetricToGroup(metricKey, section.title);
+                  return;
+                }
+                if (Number.isFinite(sourceIndex) && sourceIndex !== sectionIndex) {
+                  const next = [...displayedSections.map((item) => item.title)];
+                  const [moved] = next.splice(sourceIndex, 1);
+                  next.splice(sectionIndex, 0, moved);
+                  setDashboardGroupOrder(next);
+                }
+              }}
+              className="rounded-[28px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xl font-semibold text-black dark:text-white">{section.title}</h2>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {Array.from(new Set((chartCatalog?.metric_groups?.[section.title] || []).map((item) => item.chart_type))).map((chartType) => (
+                      <span
+                        key={`${section.title}-${chartType}`}
+                        className="rounded-full border border-black/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-black/60 dark:border-white/10 dark:text-white/60"
+                      >
+                        {chartType}
+                      </span>
+                    ))}
+                  </div>
+                  {(chartCatalog?.group_visuals?.[section.title] || []).length ? (
+                    <p className="mt-2 text-xs text-black/55 dark:text-white/55">
+                      {(chartCatalog?.group_visuals?.[section.title] || []).map((visual) => `${visual.title} (${visual.chart_type})`).join(' · ')}
+                    </p>
+                  ) : null}
+                </div>
+                <span className="text-sm text-black/60 dark:text-white/60">{populated}/{section.keys.length} populated</span>
+              </div>
+
+              <div className="mt-5">
+                {chartContracts?.groups?.[section.title]?.length
+                  ? renderDashboardContracts(chartContracts.groups[section.title])
+                  : buildGroupVisuals(section.title, mergedResults, filteredData)}
+              </div>
+
+              <div className="mt-5 grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {section.keys.filter((key) => !chartOnlyMetrics.has(key)).map((key) => {
+                  const value = mergedResults[key];
+                  return (
+                    <div
+                      key={key}
+                      draggable
+                      onDragStart={(event) => event.dataTransfer.setData('text/metric-key', key)}
+                    >
+                      <MetricCard
+                        label={humanizeKey(key)}
+                        value={extractMetricValue(key, value)}
+                        helper={metricInterpretation(key, value)}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      {widgetModalOpen ? (
+        <WidgetSelectionModal
+          widgets={widgetCatalog}
+          visibility={dashboardTopWidgetVisibility}
+          onToggle={toggleTopWidget}
+          onClose={() => setWidgetModalOpen(false)}
+        />
+      ) : null}
+
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm font-semibold text-black outline-none dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white"
+      >
+        <option value="all">All</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function WidgetSelectionModal({
+  widgets,
+  visibility,
+  onToggle,
+  onClose,
+}: {
+  widgets: Array<{ key: string; label: string; helper?: string | null }>;
+  visibility: Record<string, boolean>;
+  onToggle: (widgetKey: string) => void;
+  onClose: () => void;
+}) {
+  const allSelected = widgets.every((widget) => visibility[widget.key] !== false);
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="max-h-[82vh] w-full max-w-3xl overflow-y-auto rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]" onClick={(event) => event.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-white pb-4 dark:bg-[#060606]">
+          <div>
+            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-white/55">Upper Widgets</p>
+            <h3 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.04em] text-black dark:text-white">Choose your dashboard summary widgets</h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onToggle('__all__')}
+              className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-black dark:border-white/10 dark:text-white"
+            >
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            <button type="button" onClick={onClose} className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-black dark:border-white/10 dark:text-white">
+              Close
+            </button>
+          </div>
+        </div>
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          {widgets.map((widget) => (
+            <label
+              key={widget.key}
+              className="flex items-center justify-between rounded-[18px] border border-black/10 px-4 py-3 text-sm font-medium text-black dark:border-white/10 dark:text-white"
+            >
+              <span>
+                <span className="block">{widget.label}</span>
+                {widget.helper ? <span className="mt-1 block text-xs font-normal text-black/55 dark:text-white/55">{widget.helper}</span> : null}
+              </span>
+              <input
+                type="checkbox"
+                checked={visibility[widget.key] !== false}
+                onChange={() => onToggle(widget.key)}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
