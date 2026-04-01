@@ -46,7 +46,7 @@ export function MetricsBarChart({
             interval={xAxisInterval ?? (data.length > 12 ? 1 : 0)}
             angle={shouldTiltTicks ? -18 : 0}
             textAnchor={shouldTiltTicks ? 'end' : 'middle'}
-            height={shouldTiltTicks ? 52 : 34}
+            height={shouldTiltTicks ? 65 : 50}
           />
           <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={88} tickFormatter={(value) => valueFormatter(Number(value))} />
           <Tooltip

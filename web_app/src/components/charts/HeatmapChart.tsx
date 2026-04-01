@@ -22,7 +22,11 @@ export function HeatmapChart({ labelsX, labelsY, matrix }: HeatmapChartProps) {
     <ChartFrame>
       <div
         className="grid gap-1.5"
-        style={{ gridTemplateColumns: `76px repeat(${labelsX.length}, minmax(0, 1fr))` }}
+        style={{ 
+          gridTemplateColumns: `76px repeat(${labelsX.length}, minmax(0, 1fr))`,
+          height: '100%',
+          width: '100%'
+        }}
       >
         <div />
         {labelsX.map((label) => (
@@ -40,7 +44,7 @@ export function HeatmapChart({ labelsX, labelsY, matrix }: HeatmapChartProps) {
               return (
                 <div
                   key={`${label}-${colIndex}`}
-                  className="flex h-10 items-center justify-center rounded-lg text-[10px] font-semibold text-black dark:text-white"
+                  className="flex h-8 items-center justify-center rounded-lg text-[10px] font-semibold text-black dark:text-white"
                   style={{ backgroundColor: heatColor(value, maxMagnitude) }}
                   title={`${label} -> ${labelsX[colIndex]}: ${value.toFixed(2)}`}
                 >
@@ -50,7 +54,7 @@ export function HeatmapChart({ labelsX, labelsY, matrix }: HeatmapChartProps) {
             })}
           </Fragment>
         ))}
-      </div>
-    </ChartFrame>
+        </div>
+      </ChartFrame>
   );
 }

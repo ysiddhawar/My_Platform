@@ -12,6 +12,9 @@ import { MetricsBarChart } from '@/components/charts/MetricsBarChart';
 import { PieMetricChart } from '@/components/charts/PieMetricChart';
 import { RadarMetricChart } from '@/components/charts/RadarMetricChart';
 import { StatCard } from '@/components/prototype/domain/StatCard';
+import { EnhancedMetricCard } from '@/components/prototype/EnhancedMetricCard';
+import { DollarSignIcon, TrophyIcon, TrendingUpIcon, TrendingDownIcon, PercentIcon, BarChartIcon, ClockIcon, TargetIcon, ShieldIcon, RatioIcon, ChartLineIcon, CalendarIcon, AnalyticsIcon } from '@/components/prototype/MetricIcons';
+import { getMetricIcon } from '@/components/prototype/MetricVisualMapping';
 import type { DashboardChartContract, OverviewData, TradeRecord } from '@/types/prototype';
 import { defaultDashboardFilters, defaultDashboardGroupOrder, usePrototypeStore } from '@/state/prototypeStore';
 import { formatCompactNumber, formatCurrency, formatDate, formatMinutes, formatNumber, formatPercent, humanizeKey } from '@/utils/format';
@@ -1241,9 +1244,9 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
   return null;
 }
 
-function VisualCard({ title, children }: { title: string; children: React.ReactNode }) {
+function VisualCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b]">
+    <div className={`rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${className}`}>
       <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
       <div className="mt-3 h-[220px]">{children}</div>
     </div>
@@ -1283,16 +1286,25 @@ function MetricCard({
   label,
   value,
   helper,
+  metricKey,
 }: {
   label: string;
   value: string;
   helper?: string | null;
+  metricKey: string;
 }) {
+  const icon = getMetricIcon(metricKey);
+  
   return (
     <div className="h-full min-h-[96px] rounded-[16px] border border-black/10 bg-white px-3 py-3 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
-      <div className="min-w-0">
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-black/55 dark:text-white/55">{label}</p>
-        <p className="mt-1.5 text-[1.14rem] font-semibold tracking-[-0.03em] text-black dark:text-white">{value}</p>
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-black/55 dark:text-white/55">{label}</p>
+          <p className="mt-1.5 text-[1.14rem] font-semibold tracking-[-0.03em] text-black dark:text-white">{value}</p>
+        </div>
       </div>
     </div>
   );
@@ -1931,7 +1943,7 @@ export function DashboardScreen() {
 
   return (
     <div className="space-y-8 text-black dark:text-white">
-      <section className="sticky top-0 z-20 -mx-5 border-y border-black bg-black px-2 py-1.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white dark:bg-white dark:text-black md:-mx-8 xl:-mx-10">
+      <section className="sticky top-0 z-[9999] -mx-5 border-y border-black bg-black px-4 py-1.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white dark:bg-white dark:text-black md:-mx-8 md:px-8 xl:-mx-10 xl:px-10">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -2004,10 +2016,84 @@ export function DashboardScreen() {
 
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-6">
-        {heroCards.map((card) => (
-          <TopFoldKpiCard key={card.key} label={card.label} value={card.value} status={card.status} tone={card.tone} />
-        ))}
+      <section className="grid gap-4 xl:grid-cols-3 lg:grid-cols-2 md:grid-cols-2">
+        {/* Net P&L Card */}
+        <EnhancedMetricCard
+          icon={<DollarSignIcon />}
+          title="Net P&L"
+          value={formatCurrency(metrics.totalNet)}
+          tone={metrics.totalNet >= 0 ? 'good' : 'risk'}
+          trend={{
+            direction: metrics.totalNet >= 0 ? 'up' : 'down',
+            value: formatCurrency(Math.abs(metrics.totalNet)),
+            label: 'total return'
+          }}
+        />
+
+        {/* Win Rate Card */}
+        <EnhancedMetricCard
+          icon={<PercentIcon />}
+          title="Win Rate"
+          value={formatPercent(metrics.winRate)}
+          tone={metrics.winRate >= 0.5 ? 'good' : metrics.winRate >= 0.4 ? 'caution' : 'risk'}
+          trend={{
+            direction: metrics.winRate >= 0.5 ? 'up' : 'neutral',
+            value: `${(metrics.winRate * 100).toFixed(1)}%`,
+            label: 'win percentage'
+          }}
+        />
+
+        {/* Trade Count Card */}
+        <EnhancedMetricCard
+          icon={<BarChartIcon />}
+          title="Total Trades"
+          value={formatCompactNumber(metrics.tradeCount)}
+          tone="neutral"
+          trend={{
+            direction: 'up',
+            value: formatNumber(metrics.tradeCount),
+            label: 'completed trades'
+          }}
+        />
+
+        {/* Profit Factor Card */}
+        <EnhancedMetricCard
+          icon={<RatioIcon />}
+          title="Profit Factor"
+          value={formatNumber(metrics.profitFactor)}
+          tone={metrics.profitFactor >= 1.5 ? 'good' : metrics.profitFactor >= 1 ? 'caution' : 'risk'}
+          trend={{
+            direction: metrics.profitFactor >= 1 ? 'up' : 'down',
+            value: formatNumber(metrics.profitFactor),
+            label: 'profit ratio'
+          }}
+        />
+
+        {/* Expectancy Card */}
+        <EnhancedMetricCard
+          icon={<ChartLineIcon />}
+          title="Expectancy"
+          value={formatCurrency(metrics.expectancy)}
+          tone={metrics.expectancy > 0 ? 'good' : metrics.expectancy === 0 ? 'caution' : 'risk'}
+          trend={{
+            direction: metrics.expectancy > 0 ? 'up' : 'down',
+            value: formatCurrency(metrics.expectancy),
+            label: 'per trade avg'
+          }}
+        />
+
+        {/* Max Drawdown Card */}
+        <EnhancedMetricCard
+          icon={<ShieldIcon />}
+          title="Max Drawdown"
+          value={formatPercent(metrics.maxDrawdown)}
+          tone={metrics.maxDrawdown <= 0.1 ? 'good' : metrics.maxDrawdown <= 0.2 ? 'caution' : 'risk'}
+          trend={{
+            direction: 'down',
+            value: formatPercent(metrics.maxDrawdown),
+            label: 'risk metric'
+          }}
+        />
       </section>
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
@@ -2080,29 +2166,33 @@ export function DashboardScreen() {
           </div>
         </div>
         <div className="mt-5 grid gap-5">
-          <VisualCard title="P&amp;L by Weekday">
-            <MetricsBarChart
-              data={timePatternInsights.weekdayPnlBars}
-              valueFormatter={(value) => formatCurrency(value)}
-              barColor="#0f766e"
-              xAxisInterval={0}
-            />
-          </VisualCard>
-          <VisualCard title="P&amp;L by Hour">
-            <MetricsBarChart
-              data={timePatternInsights.hourPnlBars}
-              valueFormatter={(value) => formatCurrency(value)}
-              labelFormatter={(label) => label}
-              barColor="#1d4ed8"
-              xAxisInterval={1}
-            />
-          </VisualCard>
-          <VisualCard title="Trade Frequency Heatmap">
-            <HeatmapChart
-              labelsX={compactHeatmap.labelsX}
-              labelsY={compactHeatmap.labelsY}
-              matrix={compactHeatmap.matrix}
-            />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <VisualCard title="P&amp;L by Weekday">
+              <MetricsBarChart
+                data={timePatternInsights.weekdayPnlBars}
+                valueFormatter={(value) => formatCurrency(value)}
+                barColor="#0f766e"
+                xAxisInterval={0}
+              />
+            </VisualCard>
+            <VisualCard title="P&amp;L by Hour">
+              <MetricsBarChart
+                data={timePatternInsights.hourPnlBars}
+                valueFormatter={(value) => formatCurrency(value)}
+                labelFormatter={(label) => label}
+                barColor="#1d4ed8"
+                xAxisInterval={1}
+              />
+            </VisualCard>
+          </div>
+          <VisualCard title="Trade Frequency Heatmap" className="h-[400px]">
+            <div className="h-[400px]">
+              <HeatmapChart
+                labelsX={compactHeatmap.labelsX}
+                labelsY={compactHeatmap.labelsY}
+                matrix={compactHeatmap.matrix}
+              />
+            </div>
           </VisualCard>
         </div>
       </section>
@@ -2181,6 +2271,7 @@ export function DashboardScreen() {
                         label={humanizeKey(key)}
                         value={extractMetricValue(key, value)}
                         helper={metricInterpretation(key, value)}
+                        metricKey={key}
                       />
                     </div>
                   );
