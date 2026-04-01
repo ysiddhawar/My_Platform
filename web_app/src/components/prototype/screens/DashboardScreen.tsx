@@ -201,6 +201,30 @@ function buildTimePatternInsights(trades: TradeRecord[]) {
   };
 }
 
+function buildCompactTimeHeatmap(input: { heatmapX: string[]; heatmapY: string[]; tradeCountHeatmap: number[][] }) {
+  const bucketSize = 4;
+  const compactX: string[] = [];
+  for (let start = 0; start < input.heatmapX.length; start += bucketSize) {
+    const end = Math.min(start + bucketSize - 1, input.heatmapX.length - 1);
+    compactX.push(`${input.heatmapX[start]}-${input.heatmapX[end]}`);
+  }
+
+  const compactMatrix = input.tradeCountHeatmap.map((row) => {
+    const next: number[] = [];
+    for (let start = 0; start < row.length; start += bucketSize) {
+      const bucket = row.slice(start, start + bucketSize);
+      next.push(bucket.reduce((sum, value) => sum + Number(value || 0), 0));
+    }
+    return next;
+  });
+
+  return {
+    labelsX: compactX,
+    labelsY: input.heatmapY,
+    matrix: compactMatrix,
+  };
+}
+
 function buildGroupedSeries(trades: TradeRecord[], returns: number[], selector: (trade: TradeRecord, index: number) => string): Record<string, number[]> {
   const buckets = new Map<string, number[]>();
   trades.filter((trade) => trade.is_closed).forEach((trade, index) => {
@@ -1227,9 +1251,14 @@ function VisualCard({ title, children }: { title: string; children: React.ReactN
 }
 
 function renderDashboardContracts(contracts: DashboardChartContract[]) {
+  const filteredContracts = contracts.filter((contract) => {
+    const title = String(contract.title || '').toLowerCase();
+    return !title.includes('trade count') && !title.includes('total completed trades');
+  });
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {contracts.map((contract) => (
+      {filteredContracts.map((contract) => (
         <VisualCard key={`${contract.chart_type}-${contract.title}`} title={contract.title}>
           {contract.chart_type === 'bar' ? <MetricsBarChart data={(contract.points || []) as Array<{ metric: string; value: number }>} /> : null}
           {contract.chart_type === 'pie' ? <PieMetricChart data={(contract.points || []) as Array<{ name: string; value: number }>} /> : null}
@@ -1308,10 +1337,12 @@ function TopFoldKpiCard({
           : 'bg-slate-500/12 text-slate-600 dark:text-slate-300';
 
   return (
-    <div className="rounded-[22px] border border-black/10 bg-white px-4 py-4 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{label}</p>
-        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${toneClass}`}>{status}</span>
+    <div className="min-w-0 rounded-[22px] border border-black/10 bg-white px-3 py-4 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] items-start gap-2">
+        <p className="min-w-0 text-[0.58rem] font-semibold uppercase leading-tight tracking-[0.1em] text-black/55 dark:text-white/55">{label}</p>
+        <span className={`inline-flex min-w-0 items-center justify-center rounded-full px-2 py-1 text-[9px] font-semibold uppercase leading-tight tracking-[0.08em] ${toneClass}`}>
+          {status}
+        </span>
       </div>
       <p className="mt-3 text-[1.4rem] font-semibold tracking-[-0.04em] text-black dark:text-white">{value}</p>
     </div>
@@ -1626,6 +1657,7 @@ export function DashboardScreen() {
     const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
     const wins = winTrades.length;
     const losses = lossTrades.length;
+    const openTrades = Math.max(0, trades.length - wins - losses);
     const avgWin = average(winTrades.map((trade) => Number(trade.net_pnl || 0)));
     const avgLoss = average(lossTrades.map((trade) => Number(trade.net_pnl || 0)));
     const grossProfit = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
@@ -1663,6 +1695,7 @@ export function DashboardScreen() {
       tradeCount: trades.length,
       winCount: wins,
       lossCount: losses,
+      openCount: openTrades,
       winRate: closed.length ? wins / closed.length : 0,
       totalNet,
       maxDrawdown: Math.abs(maxDrawdownFromReturns(returns)),
@@ -1763,6 +1796,7 @@ export function DashboardScreen() {
   );
   const pnlCurve = useMemo(() => buildDailyNetCurve(filteredData?.trades || []), [filteredData]);
   const timePatternInsights = useMemo(() => buildTimePatternInsights(filteredData?.trades || []), [filteredData]);
+  const compactHeatmap = useMemo(() => buildCompactTimeHeatmap(timePatternInsights), [timePatternInsights]);
 
   if (isLoading) {
     return <p className="text-sm text-gray-600 dark:text-slate-400">Loading dashboard…</p>;
@@ -1976,16 +2010,26 @@ export function DashboardScreen() {
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
-        <TopFoldPanel title="Performance Trend">
-          {pnlCurve.length ? (
-            <FriendlyPnlChart data={pnlCurve} />
-          ) : (
-            <p className="rounded-[18px] border border-dashed border-black/10 px-4 py-8 text-sm text-black/60 dark:border-white/10 dark:text-white/60">
-              No closed-trade history yet for a P&amp;L curve.
-            </p>
-          )}
-        </TopFoldPanel>
+      <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
+        <div className="grid gap-6">
+          <TopFoldPanel title="Performance Trend">
+            {pnlCurve.length ? (
+              <FriendlyPnlChart data={pnlCurve} />
+            ) : (
+              <p className="rounded-[18px] border border-dashed border-black/10 px-4 py-8 text-sm text-black/60 dark:border-white/10 dark:text-white/60">
+                No closed-trade history yet for a P&amp;L curve.
+              </p>
+            )}
+          </TopFoldPanel>
+
+          {behaviorWidgets.length ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {behaviorWidgets.map((widget) => (
+                <StatCard key={widget.key} label={widget.label} value={widget.value} helper={widget.helper} tone={widget.tone} />
+              ))}
+            </div>
+          ) : null}
+        </div>
 
         <TopFoldPanel title="Trade Outcomes">
           <div className="grid gap-5">
@@ -1999,14 +2043,16 @@ export function DashboardScreen() {
             />
             <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/50 dark:text-white/50">Wins vs Losses</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/50 dark:text-white/50">Wins vs Losses Percentage</p>
                 <div className="mt-3">
                   <PieMetricChart
                     data={[
-                      { name: 'Wins', value: metrics.winCount },
-                      { name: 'Losses', value: metrics.lossCount },
+                      { name: 'Wins', value: metrics.winCount + metrics.lossCount > 0 ? metrics.winRate * 100 : 0 },
+                      { name: 'Losses', value: metrics.winCount + metrics.lossCount > 0 ? (1 - metrics.winRate) * 100 : 0 },
                     ]}
                     colors={['#10b981', '#ef4444']}
+                    valueFormatter={(value) => `${value.toFixed(1)}%`}
+                    tooltipFormatter={(value, name) => [`${value.toFixed(1)}%`, name]}
                   />
                 </div>
               </div>
@@ -2015,6 +2061,7 @@ export function DashboardScreen() {
                 items={[
                   { label: 'Wins', value: metrics.winCount, tone: 'good' },
                   { label: 'Losses', value: metrics.lossCount, tone: 'risk' },
+                  { label: 'Open', value: metrics.openCount, tone: 'neutral' },
                 ]}
                 formatter={(value) => formatNumber(value)}
               />
@@ -2022,14 +2069,6 @@ export function DashboardScreen() {
           </div>
         </TopFoldPanel>
       </section>
-
-      {behaviorWidgets.length ? (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          {behaviorWidgets.map((widget) => (
-            <StatCard key={widget.key} label={widget.label} value={widget.value} helper={widget.helper} tone={widget.tone} />
-          ))}
-        </section>
-      ) : null}
 
       <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606]">
         <div className="flex items-center justify-between gap-3">
@@ -2040,27 +2079,29 @@ export function DashboardScreen() {
             </p>
           </div>
         </div>
-        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+        <div className="mt-5 grid gap-5">
           <VisualCard title="P&amp;L by Weekday">
             <MetricsBarChart
               data={timePatternInsights.weekdayPnlBars}
               valueFormatter={(value) => formatCurrency(value)}
               barColor="#0f766e"
+              xAxisInterval={0}
             />
           </VisualCard>
           <VisualCard title="P&amp;L by Hour">
             <MetricsBarChart
               data={timePatternInsights.hourPnlBars}
               valueFormatter={(value) => formatCurrency(value)}
-              labelFormatter={(label) => label.replace(':00', '')}
+              labelFormatter={(label) => label}
               barColor="#1d4ed8"
+              xAxisInterval={1}
             />
           </VisualCard>
           <VisualCard title="Trade Frequency Heatmap">
             <HeatmapChart
-              labelsX={timePatternInsights.heatmapX}
-              labelsY={timePatternInsights.heatmapY}
-              matrix={timePatternInsights.tradeCountHeatmap}
+              labelsX={compactHeatmap.labelsX}
+              labelsY={compactHeatmap.labelsY}
+              matrix={compactHeatmap.matrix}
             />
           </VisualCard>
         </div>
@@ -2128,7 +2169,7 @@ export function DashboardScreen() {
               </div>
 
               <div className="mt-5 grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {section.keys.filter((key) => !chartOnlyMetrics.has(key)).map((key) => {
+                {section.keys.filter((key) => !chartOnlyMetrics.has(key) && key !== 'trade_count').map((key) => {
                   const value = mergedResults[key];
                   return (
                     <div

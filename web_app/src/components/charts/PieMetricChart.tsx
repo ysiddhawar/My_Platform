@@ -13,6 +13,7 @@ type PieMetricChartProps = {
   colors?: string[];
   className?: string;
   valueFormatter?: (value: number) => string;
+  tooltipFormatter?: (value: number, name: string, total: number) => [string, string];
 };
 
 const defaultColors = ['#0f766e', '#1d4ed8', '#b45309', '#b91c1c', '#7c3aed', '#334155'];
@@ -22,6 +23,7 @@ export function PieMetricChart({
   colors = defaultColors,
   className,
   valueFormatter = (value) => formatCompactNumber(value),
+  tooltipFormatter,
 }: PieMetricChartProps) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   return (
@@ -34,7 +36,10 @@ export function PieMetricChart({
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: number) => {
+            formatter={(value: number, name: string) => {
+              if (tooltipFormatter) {
+                return tooltipFormatter(Number(value), String(name), total);
+              }
               const share = total > 0 ? `${((Number(value) / total) * 100).toFixed(1)}%` : '0%';
               return [`${valueFormatter(Number(value))} · ${share}`, 'Value'];
             }}

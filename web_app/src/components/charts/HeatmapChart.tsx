@@ -19,20 +19,20 @@ export function HeatmapChart({ labelsX, labelsY, matrix }: HeatmapChartProps) {
   const maxMagnitude = matrix.flat().reduce((max, value) => Math.max(max, Math.abs(value || 0)), 0);
 
   return (
-    <ChartFrame className="overflow-auto">
+    <ChartFrame>
       <div
-        className="grid gap-2"
-        style={{ gridTemplateColumns: `92px repeat(${labelsX.length}, minmax(50px, 1fr))` }}
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: `76px repeat(${labelsX.length}, minmax(0, 1fr))` }}
       >
         <div />
         {labelsX.map((label) => (
-          <div key={label} className="text-center text-xs font-semibold text-black/65 dark:text-white/65">
+          <div key={label} className="text-center text-[10px] font-semibold leading-tight text-black/65 dark:text-white/65">
             {label}
           </div>
         ))}
         {labelsY.map((label, rowIndex) => (
           <Fragment key={label}>
-            <div key={`${label}-label`} className="flex items-center text-xs font-semibold text-black/65 dark:text-white/65">
+            <div key={`${label}-label`} className="flex items-center text-[10px] font-semibold text-black/65 dark:text-white/65">
               {label}
             </div>
             {labelsX.map((_, colIndex) => {
@@ -40,7 +40,7 @@ export function HeatmapChart({ labelsX, labelsY, matrix }: HeatmapChartProps) {
               return (
                 <div
                   key={`${label}-${colIndex}`}
-                  className="flex h-12 items-center justify-center rounded-xl text-[11px] font-semibold text-black dark:text-white"
+                  className="flex h-10 items-center justify-center rounded-lg text-[10px] font-semibold text-black dark:text-white"
                   style={{ backgroundColor: heatColor(value, maxMagnitude) }}
                   title={`${label} -> ${labelsX[colIndex]}: ${value.toFixed(2)}`}
                 >

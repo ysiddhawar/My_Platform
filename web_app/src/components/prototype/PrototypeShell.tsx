@@ -136,8 +136,8 @@ export function PrototypeShell() {
           <main
             className={`flex-1 overflow-y-auto ${
               activeView === 'dashboard'
-                ? 'px-5 pb-6 pt-0 md:px-8 md:pb-8 md:pt-0 xl:px-10 xl:pb-10 xl:pt-0'
-                : 'px-5 py-6 md:px-8 md:py-8 xl:px-10 xl:py-10'
+                ? 'px-2 pb-6 pt-0 md:px-3 md:pb-8 md:pt-0 xl:px-4 xl:pb-10 xl:pt-0'
+                : 'px-2 py-6 md:px-3 md:py-8 xl:px-4 xl:py-10'
             }`}
           >
             {shouldGateData ? (
