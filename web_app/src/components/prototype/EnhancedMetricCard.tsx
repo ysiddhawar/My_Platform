@@ -73,7 +73,7 @@ export function EnhancedMetricCard({
   const colors = toneColors[tone];
 
   return (
-    <div className={`flex items-center gap-4 rounded-xl border p-4 ${colors.bg} ${colors.border} dark:bg-opacity-10`}>
+    <div className={`flex items-center gap-4 rounded-xl border p-4 transition-all duration-200 hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] ${colors.bg} ${colors.border} dark:bg-opacity-10`}>
       {/* Icon Container */}
       <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${colors.iconBg}`}>
         <div className={colors.iconColor}>

@@ -308,13 +308,7 @@ def build_dashboard_contracts(request: DashboardChartContractsRequest):
                     {"metric": "Total Cost", "value": _num(cost_summary.get("total_cost"))},
                 ],
             },
-            {
-                "title": "Net PnL Curve",
-                "chart_type": "timeseries",
-                "points": _build_labeled_series(_num_list(adjusted_pnl.get("cumulative_net_curve")), "T", "net"),
-                "series": [{"key": "net", "color": "#0f766e", "name": "Cumulative Net"}],
-            },
-        ],
+                    ],
         "Performance Metrics": [
             {
                 "title": "Equity Curve",

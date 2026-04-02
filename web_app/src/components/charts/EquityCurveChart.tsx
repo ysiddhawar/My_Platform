@@ -10,11 +10,43 @@ type Point = {
 
 type EquityCurveChartProps = {
   data: Point[];
+  className?: string;
 };
 
-export function EquityCurveChart({ data }: EquityCurveChartProps) {
+export function EquityCurveChart({ data, className }: EquityCurveChartProps) {
+  if (className?.includes('h-[') || className?.includes('h-[')) {
+    // Bypass ChartFrame for custom heights
+    return (
+      <div className={className}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
+            <XAxis dataKey="t" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} />
+            <YAxis
+              stroke="#64748b"
+              tickLine={false}
+              axisLine={false}
+              width={72}
+              tickFormatter={(value) => {
+                const numeric = Number(value);
+                return Math.abs(numeric) >= 1000 ? `$${formatCompactNumber(numeric)}` : formatCurrency(numeric);
+              }}
+            />
+            <Tooltip
+              formatter={(value: number) => [formatCurrency(Number(value)), 'Equity']}
+              labelFormatter={(label: string) => label}
+              contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
+            />
+            <Line type="monotone" dataKey="equity" stroke="#0f766e" strokeWidth={3} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+  
+  // Use ChartFrame for default heights
   return (
-    <ChartFrame>
+    <ChartFrame className={className}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />

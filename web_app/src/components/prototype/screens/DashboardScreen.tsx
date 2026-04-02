@@ -35,9 +35,9 @@ type ChartDatum = {
 };
 
 const defaultMetricSections: MetricSection[] = [
-  { title: 'Journal Metrics', keys: ['trade_count', 'win_count', 'loss_count', 'win_rate', 'loss_rate', 'average_win', 'average_loss', 'payoff_ratio', 'profit_factor', 'expectancy', 'cost_summary', 'adjusted_pnl'] },
+  { title: 'Journal Metrics', keys: ['payoff_ratio', 'cost_summary', 'adjusted_pnl'] },
   { title: 'Performance Metrics', keys: ['sharpe', 'sortino', 'calmar', 'cagr', 'rolling_sharpe', 'net_sharpe', 'net_sortino', 'net_cagr'] },
-  { title: 'Risk Metrics', keys: ['volatility', 'rolling_volatility', 'adaptive_rolling_volatility', 'max_drawdown', 'rolling_drawdown', 'drawdown_duration', 'ulcer_index', 'downside_deviation', 'value_at_risk', 'conditional_var'] },
+  { title: 'Risk Metrics', keys: ['volatility', 'rolling_volatility', 'adaptive_rolling_volatility', 'rolling_drawdown', 'drawdown_duration', 'ulcer_index', 'downside_deviation', 'value_at_risk', 'conditional_var'] },
   { title: 'Distribution Metrics', keys: ['normality_test', 'skewness', 'kurtosis', 'fat_tail_index', 'tail_ratio', 'student_t_fit', 'pareto_fit', 'power_law_exponent', 'lognormal_test', 'autocorrelation', 'pareto_tail_estimator', 'power_law_fit'] },
   { title: 'Regime Metrics', keys: ['volatility_regime', 'regime_labeling', 'regime_sharpe', 'regime_drawdown', 'regime_transition_matrix', 'regime_switching', 'volatility_clustering', 'garch_volatility', 'regime_breakdown', 'regime_fragility'] },
   { title: 'Robustness Metrics', keys: ['walk_forward', 'bootstrap', 'block_bootstrap', 'parameter_sensitivity', 'noise_stability', 'regime_stability', 'monte_carlo_stability', 'stability_score'] },
@@ -841,7 +841,7 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
     volatility: returnsStd,
     rolling_volatility: rollingVolSeries,
     adaptive_rolling_volatility: { latest_volatility: rollingVolSeries[rollingVolSeries.length - 1] || returnsStd, average_volatility: average(rollingVolSeries) || returnsStd, series: rollingVolSeries },
-    max_drawdown: maxDrawdown,
+    max_drawdown: Math.abs(maxDrawdown),
     rolling_drawdown: ddSeries,
     drawdown_duration: { max_periods: ddDuration.maxPeriods, current_periods: ddDuration.currentPeriods },
     ulcer_index: ui,
@@ -942,7 +942,6 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
 
   if (sectionTitle === 'Journal Metrics') {
     const costSummary = (mergedResults.cost_summary as Record<string, unknown>) || {};
-    const dailyNetCurve = buildDailyNetCurve(trades);
     return (
       <div className="grid gap-4 lg:grid-cols-3">
         <VisualCard title="Trade Distribution">
@@ -964,15 +963,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
             ]}
           />
         </VisualCard>
-        <VisualCard title="Daily Net P&L">
-          <GenericTimeSeriesChart
-            data={dailyNetCurve.map((point) => ({ label: point.label, net: point.net }))}
-            series={[{ key: 'net', color: '#0f766e', name: 'Daily Net P&L' }]}
-            valueFormatter={(value) => formatCurrency(value)}
-            tooltipLabelFormatter={(label) => label}
-          />
-        </VisualCard>
-      </div>
+        </div>
     );
   }
 
@@ -980,29 +971,43 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
     const equity = (mergedResults.equity_curve as Array<{ t: string; equity: number }>) || buildEquitySeries(trades);
     const rollingSharpe = toNumberArray(mergedResults.rolling_sharpe);
     return (
-      <div className="grid gap-4 lg:grid-cols-2">
-        <VisualCard title="Equity Curve">
-          <EquityCurveChart data={equity} />
-        </VisualCard>
-        <VisualCard title="Rolling Sharpe">
-          <GenericTimeSeriesChart
-            data={buildLabeledSeries(rollingSharpe, 'W', 'rolling')}
-            series={[{ key: 'rolling', color: '#1d4ed8', name: 'Rolling Sharpe' }]}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 lg:row-span-2">
+          <VisualCard title="Equity Curve" className="h-[600px]">
+            <EquityCurveChart data={equity} className="h-[600px]" />
+          </VisualCard>
+        </div>
+        <div className="space-y-4">
+          <VisualCard title="Rolling Sharpe" className="h-[300px]">
+            <GenericTimeSeriesChart
+              data={buildLabeledSeries(rollingSharpe, 'W', 'rolling')}
+              series={[{ key: 'rolling', color: '#1d4ed8', name: 'Rolling Sharpe' }]}
+              className="h-[300px]"
+            />
+          </VisualCard>
+          <VisualCard title="Performance Metrics" className="h-[300px]">
+            <MetricsBarChart 
+              data={[
+                { metric: 'Sharpe', value: Number(extractScalar(mergedResults.sharpe) || 0) },
+                { metric: 'Sortino', value: Number(extractScalar(mergedResults.sortino) || 0) },
+                { metric: 'Calmar', value: Number(extractScalar(mergedResults.calmar) || 0) },
+                { metric: 'CAGR', value: Number(extractScalar(mergedResults.cagr) || 0) },
+                { metric: 'Net Sharpe', value: Number(extractScalar(mergedResults.net_sharpe) || 0) },
+                { metric: 'Net Sortino', value: Number(extractScalar(mergedResults.net_sortino) || 0) },
+                { metric: 'Net CAGR', value: Number(extractScalar(mergedResults.net_cagr) || 0) },
+              ]} 
+              className="h-[300px]"
+            />
+          </VisualCard>
+        </div>
+        <VisualCard title="Outcome Mix" className="h-[300px]">
+          <PieMetricChart 
+            data={[
+              { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
+              { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
+            ]} 
+            className="h-[300px]"
           />
-        </VisualCard>
-        <VisualCard title="Performance Snapshot">
-          <MetricsBarChart data={[
-            { metric: 'Sharpe', value: Number(extractScalar(mergedResults.sharpe) || 0) },
-            { metric: 'Sortino', value: Number(extractScalar(mergedResults.sortino) || 0) },
-            { metric: 'Calmar', value: Number(extractScalar(mergedResults.calmar) || 0) },
-            { metric: 'CAGR', value: Number(extractScalar(mergedResults.cagr) || 0) },
-          ]} />
-        </VisualCard>
-        <VisualCard title="Outcome Mix">
-          <PieMetricChart data={[
-            { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
-            { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
-          ]} />
         </VisualCard>
       </div>
     );
@@ -1248,7 +1253,9 @@ function VisualCard({ title, children, className = "" }: { title: string; childr
   return (
     <div className={`rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${className}`}>
       <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
-      <div className="mt-3 h-[220px]">{children}</div>
+      <div className="mt-3 overflow-hidden" style={{ height: className.includes('h-[') ? 'auto' : '220px' }}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -2098,7 +2105,7 @@ export function DashboardScreen() {
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
         <div className="grid gap-6">
-          <TopFoldPanel title="Performance Trend">
+          <TopFoldPanel title="Net P&L Curve">
             {pnlCurve.length ? (
               <FriendlyPnlChart data={pnlCurve} />
             ) : (

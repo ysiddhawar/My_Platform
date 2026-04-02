@@ -5,5 +5,6 @@ type ChartFrameProps = PropsWithChildren<{
 }>;
 
 export function ChartFrame({ children, className }: ChartFrameProps) {
-  return <div className={`h-64 w-full ${className || ''}`.trim()}>{children}</div>;
+  const hasCustomHeight = className?.includes('h-[');
+  return <div className={`${hasCustomHeight ? 'w-full' : 'h-64 w-full'} ${className || ''}`.trim()}>{children}</div>;
 }

@@ -26,23 +26,47 @@ export function PieMetricChart({
   tooltipFormatter,
 }: PieMetricChartProps) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
+  const colorsToUse = colors || defaultColors;
+  
+  if (className?.includes('h-[') || className?.includes('h-[')) {
+    // Bypass ChartFrame for custom heights
+    return (
+      <div className={className}>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" outerRadius={88} innerRadius={36}>
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={colorsToUse[index % colorsToUse.length]} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: number, name: string) => [
+                tooltipFormatter ? tooltipFormatter(value, name, total) : valueFormatter(value),
+                name,
+              ]}
+              contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+  
+  // Use ChartFrame for default heights
   return (
     <ChartFrame className={className}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie data={data} dataKey="value" nameKey="name" outerRadius={88} innerRadius={36}>
             {data.map((entry, index) => (
-              <Cell key={`${entry.name}-${index}`} fill={colors[index % colors.length]} />
+              <Cell key={`cell-${index}`} fill={colorsToUse[index % colorsToUse.length]} />
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: number, name: string) => {
-              if (tooltipFormatter) {
-                return tooltipFormatter(Number(value), String(name), total);
-              }
-              const share = total > 0 ? `${((Number(value) / total) * 100).toFixed(1)}%` : '0%';
-              return [`${valueFormatter(Number(value))} · ${share}`, 'Value'];
-            }}
+            formatter={(value: number, name: string) => [
+              tooltipFormatter ? tooltipFormatter(value, name, total) : valueFormatter(value),
+              name,
+            ]}
             contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
           />
         </PieChart>

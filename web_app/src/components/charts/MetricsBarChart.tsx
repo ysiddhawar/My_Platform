@@ -32,6 +32,37 @@ export function MetricsBarChart({
   xAxisInterval,
 }: MetricsBarChartProps) {
   const shouldTiltTicks = data.length > 12;
+  
+  if (className?.includes('h-[') || className?.includes('h-[')) {
+    // Bypass ChartFrame for custom heights
+    return (
+      <div className={className}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
+            <XAxis
+              dataKey="metric"
+              stroke="#64748b"
+              tickLine={false}
+              axisLine={false}
+              interval={xAxisInterval ?? (data.length > 12 ? 1 : 0)}
+              angle={shouldTiltTicks ? -18 : 0}
+              textAnchor={shouldTiltTicks ? 'end' : 'middle'}
+              height={shouldTiltTicks ? 65 : 50}
+            />
+            <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={88} tickFormatter={(value) => valueFormatter(Number(value))} />
+            <Tooltip
+              formatter={(value: number) => [valueFormatter(Number(value)), labelFormatter ? labelFormatter('Metric') : 'Metric']}
+              contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
+            />
+            <Bar dataKey="value" fill={barColor} radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+  
+  // Use ChartFrame for default heights
   return (
     <ChartFrame className={className}>
       <ResponsiveContainer width="100%" height="100%">
@@ -42,7 +73,6 @@ export function MetricsBarChart({
             stroke="#64748b"
             tickLine={false}
             axisLine={false}
-            tickFormatter={labelFormatter}
             interval={xAxisInterval ?? (data.length > 12 ? 1 : 0)}
             angle={shouldTiltTicks ? -18 : 0}
             textAnchor={shouldTiltTicks ? 'end' : 'middle'}
@@ -50,11 +80,10 @@ export function MetricsBarChart({
           />
           <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={88} tickFormatter={(value) => valueFormatter(Number(value))} />
           <Tooltip
-            formatter={(value: number) => [valueFormatter(Number(value)), 'Value']}
-            labelFormatter={(label: string) => (labelFormatter ? labelFormatter(label) : label)}
+            formatter={(value: number) => [valueFormatter(Number(value)), labelFormatter ? labelFormatter('Metric') : 'Metric']}
             contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
           />
-          <Bar dataKey="value" fill={barColor} radius={[6, 6, 0, 0]} />
+          <Bar dataKey="value" fill={barColor} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </ChartFrame>
