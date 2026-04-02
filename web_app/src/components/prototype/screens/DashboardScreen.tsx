@@ -944,15 +944,6 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
     const costSummary = (mergedResults.cost_summary as Record<string, unknown>) || {};
     return (
       <div className="grid gap-4 lg:grid-cols-3">
-        <VisualCard title="Trade Distribution">
-          <PieMetricChart
-            data={[
-              { name: 'Wins', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
-              { name: 'Losses', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
-              { name: 'Open', value: trades.length - closed.length },
-            ]}
-          />
-        </VisualCard>
         <VisualCard title="Cost Breakdown">
           <MetricsBarChart
             data={[
@@ -963,7 +954,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
             ]}
           />
         </VisualCard>
-        </div>
+      </div>
     );
   }
 

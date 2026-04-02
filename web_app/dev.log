@@ -30,3 +30,8 @@
  GET /performance 404 in 7ms
  GET /performance 404 in 5ms
  GET /performance 404 in 6ms
+ ✓ Compiled in 301ms (261 modules)
+ GET /_next/static/webpack/1b083b9d34b96dbb.webpack.hot-update.json 404 in 27ms
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ✓ Compiled /performance in 221ms (1024 modules)
+ GET /performance 404 in 174ms
