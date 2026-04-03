@@ -30,7 +30,7 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
   const selectedAccount = accounts.find((account) => account.account_id === accountId) || null;
 
   return (
-    <header className="shrink-0 border-b border-black/10 bg-white px-1.5 py-1.5 dark:border-white/10 dark:bg-black lg:px-2">
+    <header className="relative z-[11000] shrink-0 border-b border-black/10 bg-white px-1 py-0.5 dark:border-white/10 dark:bg-black lg:px-1.5">
       {isDashboard ? (
         <DashboardTopbarControls
           accountId={accountId}
@@ -180,7 +180,7 @@ function DashboardTopbarControls({
       key="advanced"
       type="button"
       onClick={() => setShowAdvanced((value) => !value)}
-      className={`h-[26px] w-full rounded-[12px] border px-2 text-sm font-semibold leading-none transition ${
+      className={`h-[22px] w-full rounded-[10px] border px-1.5 text-sm font-semibold leading-none transition ${
         advancedVisible
           ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
           : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
@@ -216,7 +216,7 @@ function DashboardTopbarControls({
   ];
 
   return (
-    <div ref={controlsRef} className="space-y-1.5">
+    <div ref={controlsRef} className="space-y-0.5">
       <FilterRow
         items={rowOne}
         trailing={(
@@ -239,9 +239,9 @@ function DashboardTopbarControls({
 
 function FilterRow({ items, trailing }: { items: React.ReactNode[]; trailing?: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-1.5">
+    <div className="flex items-start gap-0.5">
       <div
-        className="grid min-w-0 flex-1 items-start gap-1.5"
+        className="grid min-w-0 flex-1 items-start gap-0.5"
         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
       >
         {items.map((item, index) => (
@@ -250,7 +250,7 @@ function FilterRow({ items, trailing }: { items: React.ReactNode[]; trailing?: R
           </div>
         ))}
       </div>
-      {trailing ? <div className="flex shrink-0 items-center gap-1.5">{trailing}</div> : null}
+      {trailing ? <div className="flex shrink-0 items-center gap-0.5">{trailing}</div> : null}
     </div>
   );
 }
@@ -299,7 +299,7 @@ function CompactFilterSelect({
             }
             setOpenDropdownId(isOpen ? null : dropdownId);
           }}
-          className={`flex h-[26px] w-full items-center justify-between rounded-[12px] border px-2 text-sm font-semibold leading-none outline-none transition ${
+          className={`flex h-[22px] w-full items-center justify-between rounded-[10px] border px-1.5 text-[13px] font-semibold leading-none outline-none transition ${
             active
               ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
               : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
@@ -309,7 +309,7 @@ function CompactFilterSelect({
           <ChevronDown />
         </button>
         {isOpen ? (
-          <div className="absolute left-0 top-full z-[100] max-h-64 w-full overflow-y-auto rounded-[14px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
+          <div className="absolute left-0 top-full z-[10050] max-h-64 w-full overflow-y-auto rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
             {options.map(([optionValue, optionLabel]) => (
               <DropdownOption
                 key={`${label}-${optionValue}`}
@@ -345,7 +345,7 @@ function AccountSelectControl({
   onOpenAccountPicker: () => void;
 }) {
   return (
-    <div className="relative min-w-[156px]">
+    <div className="relative min-w-[142px]">
       <select
         value={accountId || ''}
         onChange={(event) => {
@@ -356,7 +356,7 @@ function AccountSelectControl({
           if (event.target.value) onChooseAccount(event.target.value);
         }}
         onMouseEnter={(event) => maybeOpenHoveredSelect(event.currentTarget)}
-        className="h-[26px] w-full rounded-[12px] border border-[#ff5900] bg-[#ff5900] px-2 text-sm font-semibold leading-none text-white outline-none shadow-[0_12px_28px_rgba(255,89,0,0.18)]"
+        className="h-[22px] w-full appearance-none rounded-[10px] border border-[#ff5900] bg-[#ff5900] px-1.5 text-sm font-semibold leading-none text-white outline-none shadow-[0_12px_28px_rgba(255,89,0,0.18)]"
       >
         {!accountId ? <option value="">Select Account</option> : null}
         {accounts.map((item) => (
@@ -416,7 +416,7 @@ function BucketOrCustomFilter({
             }
             setOpenDropdownId(isOpen ? null : dropdownId);
           }}
-          className={`flex h-[26px] w-full items-center justify-between rounded-[12px] border px-2 text-sm font-semibold leading-none outline-none transition ${
+          className={`flex h-[22px] w-full items-center justify-between rounded-[10px] border px-1.5 text-[13px] font-semibold leading-none outline-none transition ${
             active
               ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
               : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
@@ -426,7 +426,7 @@ function BucketOrCustomFilter({
           <ChevronDown />
         </button>
         {isOpen ? (
-          <div className="absolute left-0 top-full z-[100] w-full rounded-[14px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
+          <div className="absolute left-0 top-full z-[10050] w-full rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
             {options.map(([optionValue, optionLabel]) => (
               <DropdownOption
                 key={`${label}-${optionValue}`}
@@ -455,7 +455,7 @@ function BucketOrCustomFilter({
                   value={customMin}
                   onChange={(event) => onChange(serializeCustomRange(event.target.value, customMax))}
                   placeholder="Min"
-                  className="h-[26px] w-full rounded-[12px] border border-black/10 bg-white px-2 text-sm font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
                 />
                 <input
                   type="text"
@@ -463,7 +463,7 @@ function BucketOrCustomFilter({
                   value={customMax}
                   onChange={(event) => onChange(serializeCustomRange(customMin, event.target.value))}
                   placeholder="Max"
-                  className="h-[26px] w-full rounded-[12px] border border-black/10 bg-white px-2 text-sm font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
                 />
               </div>
             ) : null}
@@ -500,7 +500,7 @@ function FilterFieldShell({
       {children}
       {active ? (
         <span
-          className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-full bg-[#ff5900] px-2.5 py-1 text-[12px] font-semibold text-white opacity-0 shadow-[0_12px_28px_rgba(255,89,0,0.24)] transition duration-75 group-hover:opacity-100 ${tooltipPlacementClass} ${
+          className={`pointer-events-none absolute z-50 whitespace-nowrap rounded-full bg-[#ff5900] px-2 py-[2px] text-[10px] font-semibold text-white opacity-0 shadow-[0_12px_28px_rgba(255,89,0,0.24)] transition duration-75 group-hover:opacity-100 ${tooltipPlacementClass} ${
             tooltipPlacement === 'top' || tooltipPlacement === 'bottom' ? 'left-1/2 -translate-x-1/2' : ''
           }`}
         >
@@ -531,7 +531,7 @@ function DropdownOption({
         event.preventDefault();
         onClick();
       }}
-      className={`flex w-full items-center rounded-[10px] px-2 py-1.5 text-left text-sm font-semibold transition ${
+      className={`flex w-full items-center rounded-[8px] px-1.5 py-0.5 text-left text-[13px] font-semibold transition ${
         active
           ? 'bg-black text-white dark:bg-white dark:text-black'
           : 'text-black hover:bg-[#ff5900] hover:text-white dark:text-white dark:hover:bg-[#ff5900] dark:hover:text-white'

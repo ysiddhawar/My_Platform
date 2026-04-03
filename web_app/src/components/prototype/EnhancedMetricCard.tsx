@@ -12,6 +12,8 @@ type EnhancedMetricCardProps = {
     label: string;
   };
   tone?: 'good' | 'caution' | 'risk' | 'neutral';
+  compact?: boolean;
+  showTrend?: boolean;
 };
 
 const trendIcons = {
@@ -55,11 +57,11 @@ const toneColors = {
     trendColor: 'text-red-600 dark:text-red-400',
   },
   neutral: {
-    bg: 'bg-gray-50 dark:bg-gray-900/20',
-    border: 'border-gray-200 dark:border-gray-800',
-    iconBg: 'bg-gray-100 dark:bg-gray-800',
-    iconColor: 'text-gray-600 dark:text-gray-400',
-    trendColor: 'text-gray-600 dark:text-gray-400',
+    bg: 'bg-[#e0f2fe] dark:bg-[#082f49]/55',
+    border: 'border-[#7dd3fc] dark:border-[#38bdf8]/40',
+    iconBg: 'bg-[#dbeafe] dark:bg-[#0c4a6e]',
+    iconColor: 'text-[#0284c7] dark:text-[#7dd3fc]',
+    trendColor: 'text-[#0369a1] dark:text-[#bae6fd]',
   },
 };
 
@@ -68,30 +70,47 @@ export function EnhancedMetricCard({
   title, 
   value, 
   trend, 
-  tone = 'neutral' 
+  tone = 'neutral',
+  compact = false,
+  showTrend = true,
 }: EnhancedMetricCardProps) {
   const colors = toneColors[tone];
+  const containerClass = compact
+    ? 'gap-2 rounded-[14px] p-2'
+    : 'gap-4 rounded-xl p-4';
+  const iconWrapClass = compact
+    ? 'h-7 w-7 rounded-md'
+    : 'h-12 w-12 rounded-lg';
+  const titleClass = compact
+    ? 'text-[9px]'
+    : 'text-xs';
+  const valueClass = compact
+    ? 'text-[16px]'
+    : 'text-xl';
+  const trendClass = compact
+    ? 'text-[10px]'
+    : 'text-xs';
 
   return (
-    <div className={`flex items-center gap-4 rounded-xl border p-4 transition-all duration-200 hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] ${colors.bg} ${colors.border} dark:bg-opacity-10`}>
+    <div className={`flex items-center ${containerClass} border transition-all duration-200 hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] ${colors.bg} ${colors.border} dark:bg-opacity-10`}>
       {/* Icon Container */}
-      <div className={`flex h-12 w-12 items-center justify-center rounded-lg ${colors.iconBg}`}>
+      <div className={`flex ${iconWrapClass} items-center justify-center ${colors.iconBg}`}>
         <div className={colors.iconColor}>
           {icon}
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1">
-        <p className="text-xs font-medium text-gray-600 dark:text-gray-400">{title}</p>
-        <p className="text-xl font-bold text-gray-900 dark:text-white">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className={`${titleClass} truncate font-medium text-gray-600 dark:text-gray-400`}>{title}</p>
+        <p className={`${valueClass} truncate font-bold text-gray-900 dark:text-white`}>{value}</p>
         
         {/* Trend Indicator */}
-        {trend && (
-          <div className={`flex items-center gap-1 text-xs ${colors.trendColor}`}>
+        {showTrend && trend && (
+          <div className={`flex items-center gap-1 ${trendClass} ${colors.trendColor}`}>
             {trendIcons[trend.direction]}
-            <span>{trend.label}</span>
-            <span className="font-medium">{trend.value}</span>
+            <span className="truncate">{trend.label}</span>
+            <span className="truncate font-medium">{trend.value}</span>
           </div>
         )}
       </div>

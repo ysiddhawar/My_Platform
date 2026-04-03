@@ -39,14 +39,14 @@ export function GenericTimeSeriesChart({
   xTickFormatter,
   tooltipLabelFormatter,
 }: GenericTimeSeriesChartProps) {
-  if (className?.includes('h-[') || className?.includes('h-[')) {
+  if (className) {
     // Bypass ChartFrame for custom heights
     return (
       <div className={className}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
-            <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={xTickFormatter} />
+            <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={xTickFormatter} height={42} />
             <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={64} tickFormatter={(value) => valueFormatter(Number(value))} />
             <Tooltip
               formatter={(value: number, name: string) => [valueFormatter(Number(value)), name]}
@@ -76,7 +76,7 @@ export function GenericTimeSeriesChart({
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
-          <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={xTickFormatter} />
+          <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={xTickFormatter} height={42} />
           <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={64} tickFormatter={(value) => valueFormatter(Number(value))} />
           <Tooltip
             formatter={(value: number, name: string) => [valueFormatter(Number(value)), name]}

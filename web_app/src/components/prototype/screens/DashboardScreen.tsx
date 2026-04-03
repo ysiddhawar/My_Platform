@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from 'react-query';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, Bar, CartesianGrid, ComposedChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { fetchChartCatalog, fetchDashboardChartContracts, fetchOverview, runMetricComputation } from '@/api/prototype';
 import { ChartFrame } from '@/components/charts/ChartFrame';
@@ -32,6 +32,19 @@ type BookMatrix = {
 type ChartDatum = {
   metric: string;
   value: number;
+};
+
+type TopDashboardCard = {
+  key: string;
+  icon: ReactNode;
+  title: string;
+  value: string;
+  tone: 'neutral' | 'good' | 'caution' | 'risk';
+  trend: {
+    direction: 'up' | 'down' | 'neutral';
+    value: string;
+    label: string;
+  };
 };
 
 const defaultMetricSections: MetricSection[] = [
@@ -134,11 +147,32 @@ function buildEquitySeries(trades: TradeRecord[]): Array<{ t: string; equity: nu
     const previous = rows[index - 1]?.equity || 100000;
     const rawDate = trade.entry_date || trade.entry_time?.slice(0, 10);
     rows.push({
-      t: rawDate ? formatDate(rawDate) : `Trade ${index + 1}`,
+      t: rawDate || `Trade ${index + 1}`,
       equity: previous + Number(trade.net_pnl || 0),
     });
     return rows;
   }, []);
+}
+
+function buildDailyReturns(trades: TradeRecord[], startingCapital = 100000): number[] {
+  const byDay = new Map<string, number>();
+  trades
+    .filter((trade) => trade.is_closed)
+    .forEach((trade) => {
+      const dayKey = trade.entry_date || trade.entry_time?.slice(0, 10);
+      if (!dayKey) return;
+      byDay.set(dayKey, (byDay.get(dayKey) || 0) + Number(trade.net_pnl || 0));
+    });
+
+  let equity = startingCapital;
+  return Array.from(byDay.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, net]) => {
+      const denominator = Math.max(Math.abs(equity), 1);
+      const dailyReturn = net / denominator;
+      equity += net;
+      return Number.isFinite(dailyReturn) ? dailyReturn : 0;
+    });
 }
 
 function buildDailyNetCurve(trades: TradeRecord[]): Array<{ date: string; label: string; net: number; cumulative: number }> {
@@ -420,6 +454,18 @@ function annualizedGrowth(returns: number[]): number {
   return totalReturn ** (Math.min(252, returns.length) / returns.length) - 1;
 }
 
+function annualizedSharpeRatio(returns: number[]): number {
+  const std = sampleStd(returns);
+  if (returns.length < 2 || std <= 0) return 0;
+  return (average(returns) / std) * Math.sqrt(Math.min(252, returns.length));
+}
+
+function annualizedSortinoRatio(returns: number[]): number {
+  const downside = downsideDeviation(returns);
+  if (returns.length < 2 || downside <= 0) return 0;
+  return (average(returns) / downside) * Math.sqrt(Math.min(252, returns.length));
+}
+
 const currencyMetricKeys = new Set([
   'average_win',
   'average_loss',
@@ -445,7 +491,14 @@ const percentageMetricKeys = new Set([
 
 const chartOnlyMetrics = new Set([
   'adjusted_pnl',
+  'sharpe',
+  'sortino',
+  'calmar',
+  'cagr',
   'rolling_sharpe',
+  'net_sharpe',
+  'net_sortino',
+  'net_cagr',
   'rolling_volatility',
   'adaptive_rolling_volatility',
   'rolling_drawdown',
@@ -477,6 +530,28 @@ function buildLabeledSeries(values: number[], prefix: string, key: string) {
     label: `${prefix}${index + 1}`,
     [key]: normalizeDisplayNumber(value),
   }));
+}
+
+function formatAxisDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+function buildRollingDateSeries(trades: TradeRecord[], values: number[], key: string, fallbackPrefix: string) {
+  const closed = trades.filter((trade) => trade.is_closed);
+  const offset = Math.max(0, closed.length - values.length);
+  return values.map((value, index) => {
+    const trade = closed[index + offset];
+    const rawDate = trade?.entry_date || trade?.entry_time?.slice(0, 10);
+    return {
+      label: rawDate || `${fallbackPrefix}${index + 1}`,
+      [key]: normalizeDisplayNumber(value),
+    };
+  });
 }
 
 function buildRegimeTransitionHeatmap(regimes: string[]) {
@@ -670,7 +745,7 @@ function metricRequirement(key: string): string | null {
 function buildMetricPayload(data: OverviewData | undefined) {
   const trades = data?.trades || [];
   const closed = trades.filter((trade) => trade.is_closed);
-  const returns = buildReturns(trades);
+  const returns = buildDailyReturns(trades);
   const books = buildBookMatrix(trades, returns);
   const strategyPayload = Object.fromEntries(books.labels.map((label, index) => [label, books.matrix[index]]));
   const spreadMatrix = books.matrix.length
@@ -713,11 +788,9 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
   const grossProfit = wins.reduce((sum, value) => sum + value, 0);
   const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
   const returnsStd = sampleStd(returns);
-  const averageReturn = average(returns);
   const downside = downsideDeviation(returns);
   const rollingSharpeSeries = rollingWindow(returns, Math.min(20, Math.max(10, Math.floor(returns.length / 5) || 10)), (window) => {
-    const std = sampleStd(window);
-    return std > 0 ? average(window) / std : 0;
+    return annualizedSharpeRatio(window);
   });
   const rollingVolSeries = rollingWindow(returns, Math.min(20, Math.max(10, Math.floor(returns.length / 5) || 10)), (window) => sampleStd(window));
   const ddSeries = drawdownSeries(returns);
@@ -828,13 +901,13 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
       }, []),
     },
 
-    sharpe: returnsStd > 0 ? averageReturn / returnsStd : 0,
-    sortino: downside > 0 ? averageReturn / downside : 0,
+    sharpe: annualizedSharpeRatio(returns),
+    sortino: annualizedSortinoRatio(returns),
     calmar: maxDrawdown !== 0 ? annualizedGrowth(returns) / Math.abs(maxDrawdown) : 0,
     cagr: annualizedGrowth(returns),
     rolling_sharpe: rollingSharpeSeries,
-    net_sharpe: returnsStd > 0 ? averageReturn / returnsStd : 0,
-    net_sortino: downside > 0 ? averageReturn / downside : 0,
+    net_sharpe: annualizedSharpeRatio(returns),
+    net_sortino: annualizedSortinoRatio(returns),
     net_cagr: annualizedGrowth(returns),
     equity_curve: buildEquitySeries(trades),
 
@@ -961,33 +1034,49 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
   if (sectionTitle === 'Performance Metrics') {
     const equity = (mergedResults.equity_curve as Array<{ t: string; equity: number }>) || buildEquitySeries(trades);
     const rollingSharpe = toNumberArray(mergedResults.rolling_sharpe);
+    const rollingSharpeSeries = buildRollingDateSeries(trades, rollingSharpe, 'rolling', 'W');
     return (
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 lg:row-span-2">
-          <VisualCard title="Equity Curve" className="h-[600px]">
-            <EquityCurveChart data={equity} className="h-[600px]" />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
+        <div className="lg:row-span-2">
+          <VisualCard title="Equity Curve" className="h-[680px]">
+            <EquityCurveChart data={equity} className="h-[680px]" />
           </VisualCard>
         </div>
-        <div className="space-y-4">
-          <VisualCard title="Rolling Sharpe" className="h-[300px]">
+        <div className="grid gap-4">
+          <VisualCard title="Rolling Sharpe" className="h-[340px]">
             <GenericTimeSeriesChart
-              data={buildLabeledSeries(rollingSharpe, 'W', 'rolling')}
+              data={rollingSharpeSeries}
               series={[{ key: 'rolling', color: '#1d4ed8', name: 'Rolling Sharpe' }]}
-              className="h-[300px]"
+              className="h-[340px]"
+              xTickFormatter={formatAxisDate}
+              tooltipLabelFormatter={(label) => formatDate(label)}
             />
           </VisualCard>
-          <VisualCard title="Performance Metrics" className="h-[300px]">
+          <VisualCard title="Performance Snapshot" className="h-[340px]">
             <MetricsBarChart 
               data={[
                 { metric: 'Sharpe', value: Number(extractScalar(mergedResults.sharpe) || 0) },
                 { metric: 'Sortino', value: Number(extractScalar(mergedResults.sortino) || 0) },
                 { metric: 'Calmar', value: Number(extractScalar(mergedResults.calmar) || 0) },
                 { metric: 'CAGR', value: Number(extractScalar(mergedResults.cagr) || 0) },
-                { metric: 'Net Sharpe', value: Number(extractScalar(mergedResults.net_sharpe) || 0) },
-                { metric: 'Net Sortino', value: Number(extractScalar(mergedResults.net_sortino) || 0) },
+                { metric: 'Net Sh.', value: Number(extractScalar(mergedResults.net_sharpe) || 0) },
+                { metric: 'Net So.', value: Number(extractScalar(mergedResults.net_sortino) || 0) },
                 { metric: 'Net CAGR', value: Number(extractScalar(mergedResults.net_cagr) || 0) },
               ]} 
-              className="h-[300px]"
+              className="h-[340px]"
+              tickAngle={-18}
+              tickHeight={82}
+              tooltipLabelFormatter={(label) =>
+                ({
+                  Sharpe: 'Sharpe',
+                  Sortino: 'Sortino',
+                  Calmar: 'Calmar',
+                  CAGR: 'CAGR',
+                  'Net Sh.': 'Net Sharpe',
+                  'Net So.': 'Net Sortino',
+                  'Net CAGR': 'Net CAGR',
+                }[label] || label)
+              }
             />
           </VisualCard>
         </div>
@@ -1242,9 +1331,9 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
 
 function VisualCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${className}`}>
+    <div className={`flex min-h-0 flex-col rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${className}`}>
       <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
-      <div className="mt-3 overflow-hidden" style={{ height: className.includes('h-[') ? 'auto' : '220px' }}>
+      <div className="mt-3 min-h-0 flex-1 overflow-hidden" style={{ height: className.includes('h-[') ? 'auto' : '220px' }}>
         {children}
       </div>
     </div>
@@ -1294,14 +1383,14 @@ function MetricCard({
   const icon = getMetricIcon(metricKey);
   
   return (
-    <div className="h-full min-h-[96px] rounded-[16px] border border-black/10 bg-white px-3 py-3 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
+    <div className="h-full min-h-[96px] rounded-[16px] border border-[#7dd3fc]/70 bg-[#e0f2fe] px-3 py-3 shadow-[0_18px_44px_rgba(14,165,233,0.12)] transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-[#38bdf8]/40 dark:bg-[#082f49]/55 dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
       <div className="flex items-start gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#dbeafe] text-[#0284c7] dark:bg-[#0c4a6e] dark:text-[#7dd3fc]">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-black/55 dark:text-white/55">{label}</p>
-          <p className="mt-1.5 text-[1.14rem] font-semibold tracking-[-0.03em] text-black dark:text-white">{value}</p>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-[#075985]/70 dark:text-[#bae6fd]/75">{label}</p>
+          <p className="mt-1.5 text-[1.14rem] font-semibold tracking-[-0.03em] text-[#0c4a6e] dark:text-[#e0f2fe]">{value}</p>
         </div>
       </div>
     </div>
@@ -1359,6 +1448,44 @@ function TopFoldKpiCard({
   );
 }
 
+function CompactBreakdownCard({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ label: string; value: number; tone?: 'neutral' | 'good' | 'risk' }>;
+}) {
+  const maxValue = Math.max(...items.map((item) => Math.abs(item.value)), 1);
+
+  return (
+    <div className="h-full min-h-[96px] rounded-[16px] border border-black/10 bg-white px-3 py-3 transition hover:border-[#ff5900] hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)] dark:border-white/10 dark:bg-[#111318] dark:hover:border-[#ff5900] dark:hover:shadow-[0_18px_44px_rgba(255,89,0,0.12)]">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.13em] text-black/55 dark:text-white/55">{title}</p>
+      <div className="mt-3 space-y-2.5">
+        {items.map((item) => {
+          const ratio = Math.max(0.08, Math.abs(item.value) / maxValue);
+          const toneClass =
+            item.tone === 'good'
+              ? 'bg-emerald-500'
+              : item.tone === 'risk'
+                ? 'bg-rose-500'
+                : 'bg-slate-500 dark:bg-slate-400';
+          return (
+            <div key={item.label}>
+              <div className="flex items-center justify-between gap-3 text-[0.72rem]">
+                <span className="font-medium text-black/65 dark:text-white/65">{item.label}</span>
+                <span className="font-semibold text-black dark:text-white">{formatCurrency(item.value)}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full bg-black/6 dark:bg-white/10">
+                <div className={`h-1.5 rounded-full ${toneClass}`} style={{ width: `${Math.min(100, ratio * 100)}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TopFoldPanel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={`rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606] ${className}`.trim()}>
@@ -1369,14 +1496,22 @@ function TopFoldPanel({ title, children, className = '' }: { title: string; chil
 }
 
 function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string; net: number; cumulative: number }> }) {
+  const dailyRange = Math.max(...data.map((row) => Math.abs(row.net)), 1);
+  const cumulativeRange = Math.max(...data.map((row) => Math.abs(row.cumulative)), 1);
+  const scale = cumulativeRange > 0 ? cumulativeRange / dailyRange : 1;
+  const chartData = data.map((row) => ({
+    ...row,
+    dailyScaled: row.net * scale,
+  }));
+
   return (
     <ChartFrame className="h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
           <defs>
             <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#0f766e" stopOpacity={0.32} />
-              <stop offset="100%" stopColor="#0f766e" stopOpacity={0.04} />
+              <stop offset="0%" stopColor="#2d8659" stopOpacity={0.32} />
+              <stop offset="100%" stopColor="#2d8659" stopOpacity={0.04} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.16)" vertical={false} />
@@ -1389,12 +1524,22 @@ function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string;
             tickFormatter={(value) => formatCompactCurrencyTick(Number(value))}
           />
           <Tooltip
-            formatter={(value: number, name: string) => [formatCurrency(Number(value)), name === 'cumulative' ? 'Cumulative Net P&L' : 'Daily Net P&L']}
+            formatter={(_value: number, name: string, payload) => {
+              const row = payload?.payload as { cumulative?: number; net?: number } | undefined;
+              if (name === 'cumulative') return [formatCurrency(Number(row?.cumulative || 0)), 'Cumulative Net P&L'];
+              return [formatCurrency(Number(row?.net || 0)), 'Daily Net P&L'];
+            }}
             labelFormatter={(_, payload) => payload?.[0]?.payload?.date ? formatDate(String(payload[0].payload.date)) : ''}
             contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
           />
-          <Area type="monotone" dataKey="cumulative" stroke="#0f766e" strokeWidth={3} fill="url(#pnlFill)" />
-        </AreaChart>
+          <Legend
+            verticalAlign="top"
+            height={30}
+            wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
+          />
+          <Bar dataKey="dailyScaled" name="daily" barSize={12} radius={[6, 6, 0, 0]} fill="#0066FF" />
+          <Area type="monotone" dataKey="cumulative" stroke="#2d8659" strokeWidth={3} fill="url(#pnlFill)" />
+        </ComposedChart>
       </ResponsiveContainer>
     </ChartFrame>
   );
@@ -1700,6 +1845,7 @@ export function DashboardScreen() {
     const avgDailyVolume = average(Array.from(dayVolume.values()));
     const expectancy = closed.length ? average(closedPnls) : 0;
     const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+    const payoffRatio = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
 
     return {
       tradeCount: trades.length,
@@ -1719,6 +1865,7 @@ export function DashboardScreen() {
       decisionReadiness,
       expectancy,
       profitFactor,
+      payoffRatio,
       avgWin,
       avgLoss,
       avgWinHoldMinutes,
@@ -1765,12 +1912,13 @@ export function DashboardScreen() {
         title,
         keys: allKeys.filter((key) => assignment[key] === title),
       }))
+      .filter((section) => section.title !== 'Journal Metrics')
       .filter((section) => section.keys.length > 0 || sectionMap.has(section.title));
   }, [dashboardGroupOrder, dashboardMetricGroup, sectionMap]);
   const mergedResults = useMemo(
     () =>
       Object.fromEntries(
-        Array.from(new Set(displayedSections.flatMap((section) => section.keys).concat(['equity_curve']))).map((key) => [
+        Array.from(new Set(displayedSections.flatMap((section) => section.keys).concat(['equity_curve', 'payoff_ratio', 'cost_summary', 'adjusted_pnl']))).map((key) => [
           key,
           preferDerivedKeys.has(key) ? derivedMetrics[key] ?? dashboardResults[key] : dashboardResults[key] ?? derivedMetrics[key],
         ]),
@@ -1807,6 +1955,20 @@ export function DashboardScreen() {
   const pnlCurve = useMemo(() => buildDailyNetCurve(filteredData?.trades || []), [filteredData]);
   const timePatternInsights = useMemo(() => buildTimePatternInsights(filteredData?.trades || []), [filteredData]);
   const compactHeatmap = useMemo(() => buildCompactTimeHeatmap(timePatternInsights), [timePatternInsights]);
+  const widgetCatalog = useMemo(() => {
+    const source = chartCatalog?.top_widgets || [
+      { key: 'trades', label: 'Total Completed Trades', helper: 'All records in the current filtered view.' },
+      { key: 'net_pnl', label: 'Net Return $', helper: 'After all costs.' },
+      { key: 'win_rate', label: 'Wins Percent', helper: 'Closed trades only.' },
+      { key: 'platform_time', label: 'Platform Time', helper: 'Tracked session time.' },
+      { key: 'missed_opportunities', label: 'Missed Opportunities', helper: 'Recorded but unexecuted setups.' },
+    ];
+    const base = source.filter((widget) => widget.key !== 'win_rate');
+    const extras = [
+      { key: 'payoff_ratio', label: 'Payoff Ratio', helper: 'Average winner divided by average loser.' },
+    ];
+    return [...base, ...extras.filter((item) => !base.some((widget) => widget.key === item.key))];
+  }, [chartCatalog]);
 
   if (isLoading) {
     return <p className="text-sm text-gray-600 dark:text-slate-400">Loading dashboard…</p>;
@@ -1816,17 +1978,9 @@ export function DashboardScreen() {
     return <p className="rounded-[20px] border border-rose-500/20 bg-rose-50 px-5 py-4 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{error.message}</p>;
   }
 
-  const widgetCatalog = chartCatalog?.top_widgets || [
-    { key: 'trades', label: 'Total Completed Trades', helper: 'All records in the current filtered view.' },
-    { key: 'net_pnl', label: 'Net Return $', helper: 'After all costs.' },
-    { key: 'win_rate', label: 'Wins Percent', helper: 'Closed trades only.' },
-    { key: 'platform_time', label: 'Platform Time', helper: 'Tracked session time.' },
-    { key: 'missed_opportunities', label: 'Missed Opportunities', helper: 'Recorded but unexecuted setups.' },
-  ];
   const topWidgetDefinitions: Record<string, { value: string; tone?: 'default' | 'success' | 'accent' }> = {
     trades: { value: formatCompactNumber(metrics.tradeCount) },
     net_pnl: { value: formatCurrency(metrics.totalNet), tone: metrics.totalNet >= 0 ? 'success' as const : 'default' as const },
-    win_rate: { value: formatPercent(metrics.winRate), tone: 'accent' as const },
     platform_time: { value: formatMinutes(metrics.totalMinutes) },
     missed_opportunities: { value: String(metrics.missedCount) },
     expectancy: { value: formatCurrency(metrics.expectancy) },
@@ -1839,6 +1993,7 @@ export function DashboardScreen() {
     top_loss: { value: formatCurrency(metrics.topLoss) },
     win_streak: { value: String(metrics.winStreak) },
     loss_streak: { value: String(metrics.lossStreak) },
+    payoff_ratio: { value: formatNumber(metrics.payoffRatio), tone: metrics.payoffRatio >= 1 ? 'accent' as const : 'default' as const },
     avg_daily_volume: { value: formatCompactNumber(metrics.avgDailyVolume) },
     avg_size: { value: formatCompactNumber(metrics.avgSize) },
     pre_trade_coverage: { value: formatPercent(metrics.preTradeCoverage) },
@@ -1849,111 +2004,190 @@ export function DashboardScreen() {
     decision_readiness: { value: formatPercent(metrics.decisionReadiness) },
   };
 
-  const topWidgets = widgetCatalog
-    .filter((widget) => widget.key in topWidgetDefinitions)
-    .filter((widget) => dashboardTopWidgetVisibility[widget.key] !== false)
-    .map((widget) => ({
-      key: widget.key,
-      label: widget.label,
-      helper: widget.helper || '',
-      value: topWidgetDefinitions[widget.key].value,
-      tone: topWidgetDefinitions[widget.key].tone,
-    }));
-
-  const heroCards = [
+  const topDashboardCards: TopDashboardCard[] = [
     dashboardTopWidgetVisibility.net_pnl !== false
       ? {
           key: 'net_pnl',
-          label: 'Net P&L',
+          icon: <DollarSignIcon />,
+          title: 'Net P&L',
           value: formatCurrency(metrics.totalNet),
-          status: formatMetricStatus(metrics.totalNet, 'net'),
-          tone: metrics.totalNet >= 0 ? 'good' : 'risk',
+          tone: metrics.totalNet >= 0 ? 'good' as const : 'risk' as const,
+          trend: {
+            direction: metrics.totalNet >= 0 ? 'up' as const : 'down' as const,
+            value: formatCurrency(Math.abs(metrics.totalNet)),
+            label: 'total return',
+          },
         }
       : null,
-    dashboardTopWidgetVisibility.win_rate !== false
+    dashboardTopWidgetVisibility.trades !== false
       ? {
-          key: 'win_rate',
-          label: 'Win Rate',
-          value: formatPercent(metrics.winRate),
-          status: formatMetricStatus(metrics.winRate, 'winRate'),
-          tone: metrics.winRate >= 0.5 ? 'good' : metrics.winRate >= 0.4 ? 'caution' : 'risk',
+          key: 'trades',
+          icon: <BarChartIcon />,
+          title: 'Total Trades',
+          value: formatCompactNumber(metrics.tradeCount),
+          tone: 'neutral' as const,
+          trend: {
+            direction: 'up' as const,
+            value: formatNumber(metrics.tradeCount),
+            label: 'completed trades',
+          },
         }
       : null,
     dashboardTopWidgetVisibility.profit_factor !== false
       ? {
           key: 'profit_factor',
-          label: 'Profit Factor',
+          icon: <RatioIcon />,
+          title: 'Profit Factor',
           value: formatNumber(metrics.profitFactor),
-          status: formatMetricStatus(metrics.profitFactor, 'profitFactor'),
-          tone: metrics.profitFactor >= 1.5 ? 'good' : metrics.profitFactor >= 1 ? 'caution' : 'risk',
+          tone: metrics.profitFactor >= 1.5 ? 'good' as const : metrics.profitFactor >= 1 ? 'caution' as const : 'risk' as const,
+          trend: {
+            direction: metrics.profitFactor >= 1 ? 'up' as const : 'down' as const,
+            value: formatNumber(metrics.profitFactor),
+            label: 'profit ratio',
+          },
         }
       : null,
     dashboardTopWidgetVisibility.expectancy !== false
       ? {
           key: 'expectancy',
-          label: 'Expectancy',
+          icon: <ChartLineIcon />,
+          title: 'Expectancy',
           value: formatCurrency(metrics.expectancy),
-          status: formatMetricStatus(metrics.expectancy, 'expectancy'),
-          tone: metrics.expectancy > 0 ? 'good' : metrics.expectancy === 0 ? 'caution' : 'risk',
+          tone: metrics.expectancy > 0 ? 'good' as const : metrics.expectancy === 0 ? 'caution' as const : 'risk' as const,
+          trend: {
+            direction: metrics.expectancy > 0 ? 'up' as const : 'down' as const,
+            value: formatCurrency(metrics.expectancy),
+            label: 'per trade avg',
+          },
         }
       : null,
     {
       key: 'max_drawdown',
-      label: 'Max Drawdown',
+      icon: <ShieldIcon />,
+      title: 'Max Drawdown',
       value: formatPercent(metrics.maxDrawdown),
-      status: formatMetricStatus(metrics.maxDrawdown, 'drawdown'),
-      tone: metrics.maxDrawdown <= 0.1 ? 'good' : metrics.maxDrawdown <= 0.2 ? 'caution' : 'risk',
+      tone: metrics.maxDrawdown <= 0.1 ? 'good' as const : metrics.maxDrawdown <= 0.2 ? 'caution' as const : 'risk' as const,
+      trend: {
+        direction: 'down' as const,
+        value: formatPercent(metrics.maxDrawdown),
+        label: 'risk metric',
+      },
     },
-    dashboardTopWidgetVisibility.trades !== false
+    dashboardTopWidgetVisibility.avg_win_hold !== false
       ? {
-          key: 'trades',
-          label: 'Trade Count',
-          value: formatCompactNumber(metrics.tradeCount),
-          status: formatMetricStatus(metrics.tradeCount, 'trades'),
-          tone: 'neutral',
+          key: 'avg_win_hold',
+          icon: <ClockIcon />,
+          title: 'Avg Win Hold',
+          value: formatMinutes(metrics.avgWinHoldMinutes),
+          tone: 'good' as const,
+          trend: {
+            direction: 'up' as const,
+            value: formatMinutes(metrics.avgWinHoldMinutes),
+            label: 'winner duration',
+          },
         }
       : null,
-  ].filter(Boolean) as Array<{ key: string; label: string; value: string; status: string; tone: 'neutral' | 'good' | 'caution' | 'risk' }>;
-
-  const behaviorWidgetOrder = [
-    'avg_win_hold',
-    'avg_loss_hold',
-    'top_win',
-    'top_loss',
-    'win_streak',
-    'loss_streak',
-    'platform_time',
-    'missed_opportunities',
-    'avg_daily_volume',
-    'avg_size',
-    'pre_trade_coverage',
-    'post_trade_coverage',
-    'checklist_coverage',
-    'rule_violations',
-    'probability_coverage',
-    'decision_readiness',
-  ];
-
-  const behaviorWidgets = behaviorWidgetOrder
-    .map((key) => topWidgets.find((widget) => widget.key === key))
-    .filter(Boolean)
-    .slice(0, 6) as typeof topWidgets;
+    dashboardTopWidgetVisibility.avg_loss_hold !== false
+      ? {
+          key: 'avg_loss_hold',
+          icon: <ClockIcon />,
+          title: 'Avg Loss Hold',
+          value: formatMinutes(metrics.avgLossHoldMinutes),
+          tone: 'risk' as const,
+          trend: {
+            direction: 'down' as const,
+            value: formatMinutes(metrics.avgLossHoldMinutes),
+            label: 'loser duration',
+          },
+        }
+      : null,
+    dashboardTopWidgetVisibility.top_win !== false
+      ? {
+          key: 'top_win',
+          icon: <TrophyIcon />,
+          title: 'Top Win',
+          value: formatCurrency(metrics.topWin),
+          tone: metrics.topWin > 0 ? 'good' as const : 'neutral' as const,
+          trend: {
+            direction: metrics.topWin > 0 ? 'up' as const : 'neutral' as const,
+            value: formatCurrency(metrics.topWin),
+            label: 'best trade',
+          },
+        }
+      : null,
+    dashboardTopWidgetVisibility.top_loss !== false
+      ? {
+          key: 'top_loss',
+          icon: <TrendingDownIcon />,
+          title: 'Top Loss',
+          value: formatCurrency(metrics.topLoss),
+          tone: 'risk' as const,
+          trend: {
+            direction: 'down' as const,
+            value: formatCurrency(Math.abs(metrics.topLoss)),
+            label: 'worst trade',
+          },
+        }
+      : null,
+    dashboardTopWidgetVisibility.win_streak !== false
+      ? {
+          key: 'win_streak',
+          icon: <TrendingUpIcon />,
+          title: 'Win Streak',
+          value: String(metrics.winStreak),
+          tone: metrics.winStreak > 1 ? 'good' as const : 'neutral' as const,
+          trend: {
+            direction: metrics.winStreak > 1 ? 'up' as const : 'neutral' as const,
+            value: String(metrics.winStreak),
+            label: 'best streak',
+          },
+        }
+      : null,
+    dashboardTopWidgetVisibility.loss_streak !== false
+      ? {
+          key: 'loss_streak',
+          icon: <TrendingDownIcon />,
+          title: 'Loss Streak',
+          value: String(metrics.lossStreak),
+          tone: metrics.lossStreak > 2 ? 'risk' as const : 'caution' as const,
+          trend: {
+            direction: 'down' as const,
+            value: String(metrics.lossStreak),
+            label: 'risk streak',
+          },
+        }
+      : null,
+    dashboardTopWidgetVisibility.payoff_ratio !== false
+      ? {
+          key: 'payoff_ratio',
+          icon: <RatioIcon />,
+          title: 'Payoff Ratio',
+          value: formatNumber(metrics.payoffRatio),
+          tone: metrics.payoffRatio >= 1.25 ? 'good' as const : metrics.payoffRatio >= 1 ? 'caution' as const : 'risk' as const,
+          trend: {
+            direction: metrics.payoffRatio >= 1 ? 'up' as const : 'down' as const,
+            value: formatNumber(metrics.payoffRatio),
+            label: 'winner vs loser',
+          },
+        }
+      : null,
+  ].filter(Boolean) as TopDashboardCard[];
 
   return (
     <div className="space-y-8 text-black dark:text-white">
-      <section className="sticky top-0 z-[9999] -mx-5 border-y border-black bg-black px-4 py-1.5 text-white shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white dark:bg-white dark:text-black md:-mx-8 md:px-8 xl:-mx-10 xl:px-10">
-        <div className="flex flex-wrap gap-2">
+      <section className="sticky top-0 z-[100] -mx-5 border-y border-black/10 bg-white px-4 py-0.5 text-black shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-black dark:text-white md:-mx-8 md:px-8 xl:-mx-10 xl:px-10">
+        <div className="flex flex-wrap gap-1">
           <button
             type="button"
             onClick={resetDashboardLayout}
-            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
           >
             Reset Dashboard Layout
           </button>
           <button
             type="button"
             onClick={() => setWidgetModalOpen(true)}
-            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
           >
             Select Upper Widgets
           </button>
@@ -1962,7 +2196,7 @@ export function DashboardScreen() {
             onClick={() => setDashboardFilters({
               ...defaultDashboardFilters,
             })}
-            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
           >
             Reset Filters
           </button>
@@ -1972,14 +2206,14 @@ export function DashboardScreen() {
               const name = window.prompt('Preset name');
               if (name) saveDashboardFilterPreset(name, dashboardFilters);
             }}
-            className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
           >
             Save Preset
           </button>
         </div>
 
         {dashboardFilterPresets.length ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
             <div className="min-w-[220px]">
               <FilterSelect
                 label="Saved Presets"
@@ -1994,7 +2228,7 @@ export function DashboardScreen() {
                 const preset = dashboardFilterPresets.find((item) => item.name === selectedPresetName);
                 if (preset) setDashboardFilters(preset.filters);
               }}
-              className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+              className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
             >
               Apply Preset
             </button>
@@ -2005,7 +2239,7 @@ export function DashboardScreen() {
                 deleteDashboardFilterPreset(selectedPresetName);
                 setSelectedPresetName('');
               }}
-              className="rounded-full border border-white/20 px-4 py-1 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-black/15 dark:text-black dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+              className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
             >
               Delete Preset
             </button>
@@ -2014,84 +2248,18 @@ export function DashboardScreen() {
 
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3 lg:grid-cols-2 md:grid-cols-2">
-        {/* Net P&L Card */}
-        <EnhancedMetricCard
-          icon={<DollarSignIcon />}
-          title="Net P&L"
-          value={formatCurrency(metrics.totalNet)}
-          tone={metrics.totalNet >= 0 ? 'good' : 'risk'}
-          trend={{
-            direction: metrics.totalNet >= 0 ? 'up' : 'down',
-            value: formatCurrency(Math.abs(metrics.totalNet)),
-            label: 'total return'
-          }}
-        />
-
-        {/* Win Rate Card */}
-        <EnhancedMetricCard
-          icon={<PercentIcon />}
-          title="Win Rate"
-          value={formatPercent(metrics.winRate)}
-          tone={metrics.winRate >= 0.5 ? 'good' : metrics.winRate >= 0.4 ? 'caution' : 'risk'}
-          trend={{
-            direction: metrics.winRate >= 0.5 ? 'up' : 'neutral',
-            value: `${(metrics.winRate * 100).toFixed(1)}%`,
-            label: 'win percentage'
-          }}
-        />
-
-        {/* Trade Count Card */}
-        <EnhancedMetricCard
-          icon={<BarChartIcon />}
-          title="Total Trades"
-          value={formatCompactNumber(metrics.tradeCount)}
-          tone="neutral"
-          trend={{
-            direction: 'up',
-            value: formatNumber(metrics.tradeCount),
-            label: 'completed trades'
-          }}
-        />
-
-        {/* Profit Factor Card */}
-        <EnhancedMetricCard
-          icon={<RatioIcon />}
-          title="Profit Factor"
-          value={formatNumber(metrics.profitFactor)}
-          tone={metrics.profitFactor >= 1.5 ? 'good' : metrics.profitFactor >= 1 ? 'caution' : 'risk'}
-          trend={{
-            direction: metrics.profitFactor >= 1 ? 'up' : 'down',
-            value: formatNumber(metrics.profitFactor),
-            label: 'profit ratio'
-          }}
-        />
-
-        {/* Expectancy Card */}
-        <EnhancedMetricCard
-          icon={<ChartLineIcon />}
-          title="Expectancy"
-          value={formatCurrency(metrics.expectancy)}
-          tone={metrics.expectancy > 0 ? 'good' : metrics.expectancy === 0 ? 'caution' : 'risk'}
-          trend={{
-            direction: metrics.expectancy > 0 ? 'up' : 'down',
-            value: formatCurrency(metrics.expectancy),
-            label: 'per trade avg'
-          }}
-        />
-
-        {/* Max Drawdown Card */}
-        <EnhancedMetricCard
-          icon={<ShieldIcon />}
-          title="Max Drawdown"
-          value={formatPercent(metrics.maxDrawdown)}
-          tone={metrics.maxDrawdown <= 0.1 ? 'good' : metrics.maxDrawdown <= 0.2 ? 'caution' : 'risk'}
-          trend={{
-            direction: 'down',
-            value: formatPercent(metrics.maxDrawdown),
-            label: 'risk metric'
-          }}
-        />
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+        {topDashboardCards.map((card) => (
+          <EnhancedMetricCard
+            key={card.key}
+            icon={card.icon}
+            title={card.title}
+            value={card.value}
+            tone={card.tone}
+            compact
+            showTrend={false}
+          />
+        ))}
       </section>
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
@@ -2106,13 +2274,19 @@ export function DashboardScreen() {
             )}
           </TopFoldPanel>
 
-          {behaviorWidgets.length ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {behaviorWidgets.map((widget) => (
-                <StatCard key={widget.key} label={widget.label} value={widget.value} helper={widget.helper} tone={widget.tone} />
-              ))}
+          <div className="grid items-start gap-4">
+            <div className="max-w-[720px]">
+              <CompactBreakdownCard
+                title="Cost Breakdown"
+                items={[
+                  { label: 'Brokerage', value: Number((mergedResults.cost_summary as Record<string, unknown>)?.total_brokerage || 0) },
+                  { label: 'Slippage', value: Number((mergedResults.cost_summary as Record<string, unknown>)?.total_slippage || 0), tone: 'risk' },
+                  { label: 'Swaps', value: Number((mergedResults.cost_summary as Record<string, unknown>)?.total_swaps || 0) },
+                  { label: 'Total Cost', value: Number((mergedResults.cost_summary as Record<string, unknown>)?.total_cost || 0), tone: 'good' },
+                ]}
+              />
             </div>
-          ) : null}
+          </div>
         </div>
 
         <TopFoldPanel title="Trade Outcomes">

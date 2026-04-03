@@ -25,7 +25,6 @@ export const defaultSidebarOrder: PrototypeView[] = [
 export const defaultDashboardGroupOrder = [
   'Performance Metrics',
   'Risk Metrics',
-  'Journal Metrics',
   'Portfolio Metrics',
   'Distribution Metrics',
   'Capital Metrics',
@@ -52,6 +51,7 @@ export const defaultDashboardTopWidgetVisibility: Record<string, boolean> = {
   top_loss: true,
   win_streak: true,
   loss_streak: true,
+  payoff_ratio: true,
   avg_daily_volume: true,
   avg_size: true,
   pre_trade_coverage: true,

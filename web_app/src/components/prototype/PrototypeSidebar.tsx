@@ -35,7 +35,7 @@ export function PrototypeSidebar({
 
   return (
     <aside
-      className={`relative z-40 flex h-screen shrink-0 flex-col overflow-x-visible overflow-y-auto border-r border-black/10 bg-white px-3 py-5 transition-[width] duration-200 dark:border-white/10 dark:bg-[#050505] ${
+      className={`relative z-40 flex h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-black/10 bg-white px-3 py-5 transition-[width] duration-200 dark:border-white/10 dark:bg-[#050505] ${
         collapsed ? 'w-[108px]' : 'w-[298px]'
       }`}
     >
@@ -66,19 +66,18 @@ export function PrototypeSidebar({
         </div>
       ) : null}
 
-      <nav className="mt-8 space-y-2">
+      <nav className={`mt-8 ${collapsed ? 'space-y-1.5' : 'space-y-2'}`}>
         {orderedItems.map((item, index) => {
           const isActive = item.key === activeView;
 
           if (collapsed) {
             return (
-              <div key={item.key} className="group relative overflow-visible">
+              <div key={item.key} className="group">
                 <button
                   type="button"
                   draggable={false}
                   onClick={() => onSelect(item.key)}
-                  title={item.label}
-                  className={`relative w-full rounded-[20px] border px-0 py-3 text-center transition ${
+                  className={`relative w-full rounded-[20px] border px-1 py-2 text-center transition ${
                     isActive
                       ? 'border-black bg-black text-white dark:border-[#ff5900] dark:bg-[#111111]'
                       : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
@@ -87,10 +86,16 @@ export function PrototypeSidebar({
                   <div className="flex justify-center">
                     <SidebarItemIcon view={item.key} />
                   </div>
+                  <div
+                    className={`mt-1 min-h-[28px] break-words px-1 text-center text-[10px] font-bold leading-[1.15] transition-opacity duration-75 ${
+                      isActive
+                        ? 'opacity-100'
+                        : 'opacity-0 group-hover:opacity-100'
+                    } ${isActive ? 'text-white dark:text-white' : 'text-black group-hover:text-[#ff5900] dark:text-white dark:group-hover:text-[#ff5900]'}`}
+                  >
+                    {item.label}
+                  </div>
                 </button>
-                <div className="pointer-events-none absolute left-full top-1/2 z-[160] ml-3 -translate-y-1/2 whitespace-nowrap rounded-full bg-[#ff5900] px-3 py-1.5 text-[14px] font-semibold text-white opacity-0 shadow-[0_12px_28px_rgba(255,89,0,0.24)] transition-opacity duration-75 group-hover:opacity-100 group-focus-within:opacity-100">
-                  {item.label}
-                </div>
               </div>
             );
           }

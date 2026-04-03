@@ -118,6 +118,9 @@ button,
 textarea,
 select {
   font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+  line-height: 1;
 }
 
 button {

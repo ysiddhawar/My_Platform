@@ -13,8 +13,11 @@ type MetricsBarChartProps = {
   className?: string;
   valueFormatter?: (value: number) => string;
   labelFormatter?: (label: string) => string;
+  tooltipLabelFormatter?: (label: string) => string;
   barColor?: string;
   xAxisInterval?: number;
+  tickAngle?: number;
+  tickHeight?: number;
 };
 
 function defaultBarValueFormatter(value: number) {
@@ -28,12 +31,17 @@ export function MetricsBarChart({
   className,
   valueFormatter = defaultBarValueFormatter,
   labelFormatter,
+  tooltipLabelFormatter,
   barColor = '#0f766e',
   xAxisInterval,
+  tickAngle,
+  tickHeight,
 }: MetricsBarChartProps) {
-  const shouldTiltTicks = data.length > 12;
+  const shouldTiltTicks = tickAngle != null || data.length > 12;
+  const resolvedTickAngle = tickAngle ?? (shouldTiltTicks ? -18 : 0);
+  const resolvedTickHeight = tickHeight ?? (shouldTiltTicks ? 72 : 50);
   
-  if (className?.includes('h-[') || className?.includes('h-[')) {
+  if (className) {
     // Bypass ChartFrame for custom heights
     return (
       <div className={className}>
@@ -46,13 +54,14 @@ export function MetricsBarChart({
               tickLine={false}
               axisLine={false}
               interval={xAxisInterval ?? (data.length > 12 ? 1 : 0)}
-              angle={shouldTiltTicks ? -18 : 0}
+              angle={resolvedTickAngle}
               textAnchor={shouldTiltTicks ? 'end' : 'middle'}
-              height={shouldTiltTicks ? 65 : 50}
+              height={resolvedTickHeight}
             />
             <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={88} tickFormatter={(value) => valueFormatter(Number(value))} />
             <Tooltip
-              formatter={(value: number) => [valueFormatter(Number(value)), labelFormatter ? labelFormatter('Metric') : 'Metric']}
+              formatter={(value: number) => [valueFormatter(Number(value)), 'Value']}
+              labelFormatter={(label: string) => (tooltipLabelFormatter ? tooltipLabelFormatter(label) : labelFormatter ? labelFormatter(label) : label)}
               contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
             />
             <Bar dataKey="value" fill={barColor} radius={[4, 4, 0, 0]} />
@@ -74,13 +83,14 @@ export function MetricsBarChart({
             tickLine={false}
             axisLine={false}
             interval={xAxisInterval ?? (data.length > 12 ? 1 : 0)}
-            angle={shouldTiltTicks ? -18 : 0}
+            angle={resolvedTickAngle}
             textAnchor={shouldTiltTicks ? 'end' : 'middle'}
-            height={shouldTiltTicks ? 65 : 50}
+            height={resolvedTickHeight}
           />
           <YAxis stroke="#64748b" tickLine={false} axisLine={false} width={88} tickFormatter={(value) => valueFormatter(Number(value))} />
           <Tooltip
-            formatter={(value: number) => [valueFormatter(Number(value)), labelFormatter ? labelFormatter('Metric') : 'Metric']}
+            formatter={(value: number) => [valueFormatter(Number(value)), 'Value']}
+            labelFormatter={(label: string) => (tooltipLabelFormatter ? tooltipLabelFormatter(label) : labelFormatter ? labelFormatter(label) : label)}
             contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
           />
           <Bar dataKey="value" fill={barColor} radius={[4, 4, 0, 0]} />

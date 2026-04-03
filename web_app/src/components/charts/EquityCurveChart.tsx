@@ -14,14 +14,33 @@ type EquityCurveChartProps = {
 };
 
 export function EquityCurveChart({ data, className }: EquityCurveChartProps) {
-  if (className?.includes('h-[') || className?.includes('h-[')) {
+  const formatAxisDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+  };
+
+  const formatTooltipDate = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }).format(date);
+  };
+
+  if (className) {
     // Bypass ChartFrame for custom heights
     return (
       <div className={className}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
-            <XAxis dataKey="t" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} />
+            <XAxis dataKey="t" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={formatAxisDate} height={42} />
             <YAxis
               stroke="#64748b"
               tickLine={false}
@@ -34,7 +53,7 @@ export function EquityCurveChart({ data, className }: EquityCurveChartProps) {
             />
             <Tooltip
               formatter={(value: number) => [formatCurrency(Number(value)), 'Equity']}
-              labelFormatter={(label: string) => label}
+              labelFormatter={(label: string) => formatTooltipDate(label)}
               contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
             />
             <Line type="monotone" dataKey="equity" stroke="#0f766e" strokeWidth={3} dot={false} />
@@ -50,7 +69,7 @@ export function EquityCurveChart({ data, className }: EquityCurveChartProps) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.14)" vertical={false} />
-          <XAxis dataKey="t" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} />
+          <XAxis dataKey="t" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} tickFormatter={formatAxisDate} height={42} />
           <YAxis
             stroke="#64748b"
             tickLine={false}
@@ -63,7 +82,7 @@ export function EquityCurveChart({ data, className }: EquityCurveChartProps) {
           />
           <Tooltip
             formatter={(value: number) => [formatCurrency(Number(value)), 'Equity']}
-            labelFormatter={(label: string) => label}
+            labelFormatter={(label: string) => formatTooltipDate(label)}
             contentStyle={{ borderRadius: 16, border: '1px solid rgba(15,23,42,0.08)' }}
           />
           <Line type="monotone" dataKey="equity" stroke="#0f766e" strokeWidth={3} dot={false} />
