@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery, useQueryClient } from 'react-query';
 
-import { fetchOverview } from '@/api/prototype';
+import { fetchCalendarSummaries, fetchOverview, rebuildCalendar } from '@/api/prototype';
 import { ThemeToggle } from '@/components/foundation/ThemeToggle';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import type { AccountSummary, DashboardFilterState, PrototypeView, TradeRecord } from '@/types/prototype';
@@ -27,10 +27,11 @@ type PrototypeTopbarProps = {
 
 export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccount, onOpenAccountPicker }: PrototypeTopbarProps) {
   const isDashboard = activeView === 'dashboard';
+  const isCalendar = activeView === 'calendar';
   const selectedAccount = accounts.find((account) => account.account_id === accountId) || null;
 
   return (
-    <header className="relative z-[11000] shrink-0 border-b border-black/10 bg-white px-1 py-0.5 dark:border-white/10 dark:bg-black lg:px-1.5">
+    <header className="relative z-[11000] shrink-0 border-b border-white/10 bg-[#333333] px-1 py-2 dark:border-white/10 dark:bg-[#333333] lg:px-1.5">
       {isDashboard ? (
         <DashboardTopbarControls
           accountId={accountId}
@@ -39,13 +40,20 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
           onChooseAccount={onChooseAccount}
           onOpenAccountPicker={onOpenAccountPicker}
         />
+      ) : isCalendar ? (
+        <CalendarTopbarControls
+          accountId={accountId}
+          accounts={accounts}
+          onChooseAccount={onChooseAccount}
+          onOpenAccountPicker={onOpenAccountPicker}
+        />
       ) : (
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-black/60 dark:text-white/60">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-white/65">
               {accountId ? `Account ${accountId}` : 'No Account Selected'}
             </p>
-            <h1 className="mt-1 text-[1.8rem] font-semibold tracking-[-0.04em] text-black dark:text-white">
+            <h1 className="mt-1 text-[1.8rem] font-semibold tracking-[-0.04em] text-white">
               {titleMap[activeView]}
             </h1>
           </div>
@@ -63,6 +71,112 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
         </div>
       )}
     </header>
+  );
+}
+
+function CalendarTopbarControls({
+  accountId,
+  accounts,
+  onChooseAccount,
+  onOpenAccountPicker,
+}: {
+  accountId: string | null;
+  accounts: AccountSummary[];
+  onChooseAccount: (accountId: string) => void;
+  onOpenAccountPicker: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const selectedDay = usePrototypeStore((state) => state.selectedDay);
+  const calendarVisibleMonth = usePrototypeStore((state) => state.calendarVisibleMonth);
+  const calendarVisibleYear = usePrototypeStore((state) => state.calendarVisibleYear);
+  const setCalendarVisibleMonthYear = usePrototypeStore((state) => state.setCalendarVisibleMonthYear);
+
+  const { data: summaries, isFetching } = useQuery(
+    ['prototype-calendar-summaries', accountId],
+    () => fetchCalendarSummaries(accountId as string),
+    { enabled: Boolean(accountId) },
+  );
+
+  useEffect(() => {
+    if (calendarVisibleMonth != null && calendarVisibleYear != null) return;
+    const seedDay = selectedDay || summaries?.[summaries.length - 1]?.day;
+    if (!seedDay) return;
+    const date = new Date(`${seedDay}T00:00:00`);
+    setCalendarVisibleMonthYear(date.getMonth(), date.getFullYear());
+  }, [calendarVisibleMonth, calendarVisibleYear, selectedDay, setCalendarVisibleMonthYear, summaries]);
+
+  const monthValue = calendarVisibleMonth ?? new Date().getMonth();
+  const yearValue = calendarVisibleYear ?? new Date().getFullYear();
+
+  const monthOptions = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, month) => ({
+        value: String(month),
+        label: new Date(2026, month, 1).toLocaleString('en-US', { month: 'long' }),
+      })),
+    [],
+  );
+  const yearOptions = useMemo(() => {
+    const yearsFromData = Array.from(
+      new Set((summaries || []).map((item) => Number(item.day.slice(0, 4))).filter((value) => Number.isFinite(value))),
+    ).sort((a, b) => a - b);
+    if (yearsFromData.length) {
+      return yearsFromData.map((year) => ({ value: String(year), label: String(year) }));
+    }
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 7 }, (_, index) => currentYear - 3 + index).map((year) => ({
+      value: String(year),
+      label: String(year),
+    }));
+  }, [summaries]);
+
+  const shiftMonth = (delta: number) => {
+    const nextDate = new Date(yearValue, monthValue + delta, 1);
+    setCalendarVisibleMonthYear(nextDate.getMonth(), nextDate.getFullYear());
+  };
+
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-2">
+      <div className="flex min-w-0 items-center justify-center gap-1.5">
+        <CalendarNavButton label="<" onClick={() => shiftMonth(-1)} />
+        <CalendarTopbarSelect
+          value={String(monthValue)}
+          onChange={(value) => setCalendarVisibleMonthYear(Number(value), yearValue)}
+          options={monthOptions}
+          minWidthClass="min-w-[126px]"
+        />
+        <CalendarTopbarSelect
+          value={String(yearValue)}
+          onChange={(value) => setCalendarVisibleMonthYear(monthValue, Number(value))}
+          options={yearOptions}
+          minWidthClass="min-w-[90px]"
+        />
+        <CalendarNavButton label=">" onClick={() => shiftMonth(1)} />
+        <button
+          type="button"
+          onClick={async () => {
+            if (!accountId) return;
+            await rebuildCalendar(accountId);
+            await Promise.all([
+              queryClient.invalidateQueries(['prototype-calendar-summaries', accountId]),
+              queryClient.invalidateQueries(['prototype-calendar-day-detail', accountId]),
+            ]);
+          }}
+          className="h-[30px] rounded-[10px] border border-white/15 bg-white px-2.5 text-sm font-semibold leading-none text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+        >
+          {isFetching ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5 justify-self-end">
+        <AccountSelectControl
+          accountId={accountId}
+          accounts={accounts}
+          onChooseAccount={onChooseAccount}
+          onOpenAccountPicker={onOpenAccountPicker}
+        />
+        <ThemeToggle />
+      </div>
+    </div>
   );
 }
 
@@ -252,6 +366,49 @@ function FilterRow({ items, trailing }: { items: React.ReactNode[]; trailing?: R
       </div>
       {trailing ? <div className="flex shrink-0 items-center gap-0.5">{trailing}</div> : null}
     </div>
+  );
+}
+
+function CalendarNavButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="h-[32px] w-[38px] rounded-[10px] border border-white/15 bg-white px-0 text-base font-semibold leading-none text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+    >
+      {label}
+    </button>
+  );
+}
+
+function CalendarTopbarSelect({
+  value,
+  onChange,
+  options,
+  minWidthClass,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  minWidthClass: string;
+}) {
+  return (
+    <label className={`relative block ${minWidthClass}`}>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-[30px] w-full appearance-none rounded-[10px] border border-white/15 bg-white px-2.5 pr-6 text-sm font-semibold leading-none text-black outline-none transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-black/65 dark:text-white/65">
+        <ChevronDown />
+      </span>
+    </label>
   );
 }
 

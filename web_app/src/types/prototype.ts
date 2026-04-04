@@ -50,6 +50,8 @@ export type Mt5FileBridgeInput = {
 export type WorkspaceLayout = {
   sidebarOrder: PrototypeView[];
   sidebarCollapsed?: boolean;
+  calendarVisibleMonth?: number | null;
+  calendarVisibleYear?: number | null;
   dashboardGroupOrder: string[];
   dashboardMetricGroup: Record<string, string>;
   dashboardMetricSize: Record<string, 'normal' | 'wide'>;

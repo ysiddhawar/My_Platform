@@ -1,5 +1,5 @@
 import type { CalendarDaySummary } from '@/types/prototype';
-import { formatCurrency, formatMinutes } from '@/utils/format';
+import { formatCurrency } from '@/utils/format';
 
 type CalendarMonthGridProps = {
   summaries: CalendarDaySummary[];
@@ -17,19 +17,25 @@ function toIsoLocalDay(year: number, month: number, day: number) {
   return `${year}-${monthValue}-${dayValue}`;
 }
 
-function tone(summary: CalendarDaySummary, maxMagnitude: number) {
+function tone(summary: CalendarDaySummary): { className: string } {
   if (summary.trade_count <= 0) {
-    return 'border-black/10 bg-white text-black dark:border-white/10 dark:bg-[#060606] dark:text-white';
+    return {
+      className: 'border-black/70 bg-transparent text-black dark:border-white/75 dark:text-white',
+    };
   }
-  const magnitude = Math.min(Math.abs(Number(summary.pnl || 0)) / Math.max(maxMagnitude, 1), 1);
-  const alpha = 0.12 + magnitude * 0.18;
   if (Number(summary.pnl || 0) > 0) {
-    return `border-emerald-500/20 bg-[rgba(16,185,129,${alpha.toFixed(3)})] text-black dark:text-white`;
+    return {
+      className: 'border-[#309c30] bg-[#309c30] text-white dark:text-white',
+    };
   }
   if (Number(summary.pnl || 0) < 0) {
-    return `border-rose-500/20 bg-[rgba(244,63,94,${alpha.toFixed(3)})] text-black dark:text-white`;
+    return {
+      className: 'border-[#ff0000] bg-[#ff0000] text-white dark:text-white',
+    };
   }
-  return 'border-black/10 bg-gray-50 text-black dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white';
+  return {
+    className: 'border-black/70 bg-transparent text-black dark:border-white/75 dark:text-white',
+  };
 }
 
 export function CalendarMonthGrid({ summaries, selectedDay, onSelectDay, visibleMonth, visibleYear }: CalendarMonthGridProps) {
@@ -41,7 +47,6 @@ export function CalendarMonthGrid({ summaries, selectedDay, onSelectDay, visible
   const startOfMonth = new Date(visibleYear, visibleMonth, 1);
   const endOfMonth = new Date(visibleYear, visibleMonth + 1, 0);
   const leadingBlanks = startOfMonth.getDay();
-  const maxMagnitude = ordered.reduce((max, summary) => Math.max(max, Math.abs(Number(summary.pnl || 0))), 0);
   const byDay = new Map(ordered.map((summary) => [summary.day, summary]));
 
   const cells: Array<{ type: 'blank' } | { type: 'day'; summary?: CalendarDaySummary; isoDay: string; dayNumber: number }> = [];
@@ -54,40 +59,39 @@ export function CalendarMonthGrid({ summaries, selectedDay, onSelectDay, visible
   }
 
   return (
-    <div className="rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]">
-      <div className="grid grid-cols-7 gap-3">
+      <div className="grid grid-cols-7 gap-2.5">
         {weekdayLabels.map((label) => (
-          <div key={label} className="px-2 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">
+          <div key={label} className="px-1 py-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-black/55 dark:text-white/65">
             {label}
           </div>
         ))}
         {cells.map((cell, index) =>
           cell.type === 'blank' ? (
-            <div key={`blank-${index}`} className="min-h-[118px] rounded-[18px] border border-transparent" />
-          ) : (
+            <div key={`blank-${index}`} className="min-h-[96px] rounded-[14px] border border-transparent" />
+          ) : (() => {
+            const cellTone = cell.summary ? tone(cell.summary) : { className: 'border-black/70 bg-transparent text-black dark:border-white/75 dark:text-white' };
+            const selected = cell.isoDay === selectedDay;
+            return (
             <button
               key={cell.isoDay}
               type="button"
               onClick={() => onSelectDay(cell.isoDay)}
-              className={`min-h-[118px] rounded-[18px] border p-3 text-left transition hover:-translate-y-0.5 ${
-                cell.isoDay === selectedDay ? 'border-black bg-black text-white ring-2 ring-black dark:border-white dark:bg-white dark:text-black dark:ring-white' : ''
-              } ${cell.isoDay === selectedDay ? '' : cell.summary ? tone(cell.summary, maxMagnitude) : 'border-black/10 bg-white text-black dark:border-white/10 dark:bg-[#060606] dark:text-white'}`}
+              className={`group min-h-[96px] rounded-[14px] border px-2.5 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-[#ff5900] hover:bg-[#ff5900] ${
+                selected
+                  ? 'border-black bg-black text-white ring-2 ring-black/20 dark:border-white dark:bg-white dark:text-black dark:ring-white/40'
+                  : cellTone.className
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{cell.dayNumber}</span>
-                <span className={`text-[11px] ${cell.isoDay === selectedDay ? 'text-white/70 dark:text-black/70' : 'text-black/55 dark:text-white/55'}`}>{cell.summary?.trade_count || 0}T</span>
+              <div className="flex items-start justify-between gap-2">
+                <span className={`text-[13px] font-semibold ${selected ? 'text-white dark:text-black' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.dayNumber}</span>
               </div>
-              <p className="mt-3 text-sm font-semibold">{cell.summary ? formatCurrency(Number(cell.summary.pnl || 0)) : '—'}</p>
-              <p className={`mt-1 text-xs ${cell.isoDay === selectedDay ? 'text-white/75 dark:text-black/75' : 'text-black/70 dark:text-white/70'}`}>
-                {cell.summary ? `${cell.summary.trade_count} trades` : 'No trade'}
-              </p>
-              <p className={`mt-1 text-xs ${cell.isoDay === selectedDay ? 'text-white/75 dark:text-black/75' : 'text-black/70 dark:text-white/70'}`}>
-                {cell.summary ? formatMinutes(Number(cell.summary.total_platform_time_minutes || 0)) : '0m'}
+              <p className={`mt-3 text-[13px] font-semibold ${selected ? 'text-white dark:text-black' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.summary ? formatCurrency(Number(cell.summary.pnl || 0)) : '—'}</p>
+              <p className={`mt-1 text-[11px] ${selected ? 'text-white/80 dark:text-black/75' : 'text-black/70 dark:text-white/70 group-hover:text-black dark:group-hover:text-white'}`}>
+                {cell.summary && cell.summary.trade_count > 0 ? `${cell.summary.trade_count} trades` : 'No trade'}
               </p>
             </button>
-          ),
+          )})(),
         )}
       </div>
-    </div>
   );
 }

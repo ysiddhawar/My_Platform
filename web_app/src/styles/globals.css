@@ -48,7 +48,7 @@
   --color-ink: #ffffff;
   --color-muted: #cbd5e1;
   --hero-accent: #6a5cff;
-  --theme-surface: rgba(11, 11, 12, 0.9);
+  --theme-surface: rgba(51, 51, 51, 0.94);
   --theme-border: rgba(255, 255, 255, 0.08);
   --theme-toggle-track: rgba(255, 255, 255, 0.14);
   --theme-toggle-knob: #ffffff;
@@ -59,12 +59,12 @@
   --hero-cta-text: #ffffff;
   --hero-cta-shadow: rgba(106, 92, 255, 0.28);
   --stage-shell-shadow: rgba(0, 0, 0, 0.34);
-  --stage-core-bg: rgba(10, 10, 12, 0.96);
+  --stage-core-bg: rgba(51, 51, 51, 0.96);
   --stage-core-shadow: rgba(106, 92, 255, 0.16);
-  --stage-panel-bg: rgba(14, 14, 18, 0.92);
-  --stage-inner-bg: rgba(22, 22, 30, 0.96);
+  --stage-panel-bg: rgba(51, 51, 51, 0.92);
+  --stage-inner-bg: rgba(51, 51, 51, 0.96);
   --stage-chip-bg: rgba(255, 255, 255, 0.04);
-  --stage-chart-bg: rgba(9, 9, 11, 0.98);
+  --stage-chart-bg: rgba(51, 51, 51, 0.98);
   --stage-mini-bg: rgba(106, 92, 255, 0.16);
   --stage-pill-bg: rgba(106, 92, 255, 0.14);
   --stage-pill-text: #8b82ff;

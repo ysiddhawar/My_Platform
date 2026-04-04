@@ -110,6 +110,8 @@ type PrototypeState = {
   activeView: PrototypeView;
   selectedTradeId: string | null;
   selectedDay: string | null;
+  calendarVisibleMonth: number | null;
+  calendarVisibleYear: number | null;
   accountId: string | null;
   sidebarOrder: PrototypeView[];
   sidebarCollapsed: boolean;
@@ -122,6 +124,7 @@ type PrototypeState = {
   setActiveView: (view: PrototypeView) => void;
   selectTrade: (tradeId: string) => void;
   selectDay: (day: string) => void;
+  setCalendarVisibleMonthYear: (month: number | null, year: number | null) => void;
   setAccountId: (accountId: string | null) => void;
   setSidebarOrder: (order: PrototypeView[]) => void;
   toggleSidebarCollapsed: () => void;
@@ -144,6 +147,8 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
   activeView: 'dashboard',
   selectedTradeId: null,
   selectedDay: null,
+  calendarVisibleMonth: null,
+  calendarVisibleYear: null,
   accountId: null,
   sidebarOrder: defaultSidebarOrder,
   sidebarCollapsed: false,
@@ -156,6 +161,7 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
   setActiveView: (activeView) => set({ activeView }),
   selectTrade: (selectedTradeId) => set({ selectedTradeId, activeView: 'trade-detail' }),
   selectDay: (selectedDay) => set({ selectedDay, activeView: 'calendar' }),
+  setCalendarVisibleMonthYear: (calendarVisibleMonth, calendarVisibleYear) => set({ calendarVisibleMonth, calendarVisibleYear }),
   setAccountId: (accountId) => set({ accountId }),
   setSidebarOrder: (sidebarOrder) => {
     persistJson(SIDEBAR_STORAGE_KEY, sidebarOrder);
@@ -236,6 +242,8 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
     return {
       sidebarOrder: state.sidebarOrder,
       sidebarCollapsed: state.sidebarCollapsed,
+      calendarVisibleMonth: state.calendarVisibleMonth,
+      calendarVisibleYear: state.calendarVisibleYear,
       dashboardGroupOrder: state.dashboardGroupOrder,
       dashboardMetricGroup: state.dashboardMetricGroup,
       dashboardMetricSize: state.dashboardMetricSize,
@@ -296,6 +304,8 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
       hydrated: true,
       sidebarOrder,
       sidebarCollapsed,
+      calendarVisibleMonth: null,
+      calendarVisibleYear: null,
       dashboardGroupOrder,
       dashboardMetricGroup,
       dashboardMetricSize,
