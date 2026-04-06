@@ -35,7 +35,7 @@ export function PrototypeSidebar({
 
   return (
     <aside
-      className={`relative z-40 flex h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-black/10 bg-[#333333] px-3 py-5 transition-[width] duration-200 dark:border-white/10 dark:bg-[#333333] ${
+      className={`relative z-40 flex h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-black/10 bg-[var(--sidebar-bg)] px-3 py-5 text-[var(--color-ink)] transition-[width] duration-200 dark:border-white/10 ${
         collapsed ? 'w-[108px]' : 'w-[298px]'
       }`}
     >
@@ -46,7 +46,7 @@ export function PrototypeSidebar({
         <button
           type="button"
           onClick={onToggleCollapse}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/15 bg-black text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-white text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <SidebarCollapseGlyph collapsed={collapsed} />
@@ -55,11 +55,11 @@ export function PrototypeSidebar({
 
       {!collapsed ? (
         <div className="mt-7 flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70 dark:text-white/70">Sidebar Layout</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/60 dark:text-white/70">Sidebar Layout</p>
           <button
             type="button"
             onClick={onReset}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[11px] font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
           >
             Reset
           </button>
@@ -77,10 +77,10 @@ export function PrototypeSidebar({
                   type="button"
                   draggable={false}
                   onClick={() => onSelect(item.key)}
-                  className={`relative w-full rounded-[20px] border px-1 py-2 text-center transition ${
+                    className={`relative w-full rounded-[20px] border px-1 py-2 text-center transition ${
                     isActive
-                      ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-                      : 'border-white/15 bg-[#333333] text-white hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-[#333333] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
+                      ? 'border-[#ff5900] bg-[#ff5900] text-white'
+                      : 'border-black/10 bg-[var(--sidebar-bg)] text-[#0d0d0d] hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[var(--sidebar-bg)] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white'
                   }`}
                 >
                   <div className="flex justify-center">
@@ -91,7 +91,7 @@ export function PrototypeSidebar({
                       isActive
                         ? 'opacity-100'
                         : 'opacity-0 group-hover:opacity-100'
-                    } ${isActive ? 'text-white dark:text-black' : 'text-white group-hover:text-[#ff5900] dark:text-white dark:group-hover:text-[#ff5900]'}`}
+                    } ${isActive ? 'text-white' : 'text-[#0d0d0d] group-hover:text-[#0d0d0d] dark:text-white dark:group-hover:text-white'}`}
                   >
                     {item.label}
                   </div>
@@ -121,15 +121,15 @@ export function PrototypeSidebar({
               onClick={() => onSelect(item.key)}
                 className={`w-full rounded-[20px] border px-4 py-4 text-left transition ${
                   isActive
-                  ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-                  : 'border-white/15 bg-[#333333] text-white hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-[#333333] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
+                  ? 'border-[#ff5900] bg-[#ff5900] text-white'
+                  : 'border-black/10 bg-[var(--sidebar-bg)] text-[#0d0d0d] hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[var(--sidebar-bg)] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white'
               }`}
             >
               <div className="flex items-center gap-3">
                 <SidebarItemIcon view={item.key} />
                 <div className="text-sm font-semibold">{item.label}</div>
               </div>
-              <div className={`mt-1 text-xs ${isActive ? 'text-white/75 dark:text-black/70' : 'text-white/70 dark:text-white/70'}`}>
+              <div className={`mt-1 text-xs ${isActive ? 'text-white/80' : 'text-black/60 dark:text-white/70'}`}>
                 {item.hint}
               </div>
             </button>

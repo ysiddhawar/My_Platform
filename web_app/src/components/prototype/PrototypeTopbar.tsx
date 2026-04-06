@@ -31,7 +31,7 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
   const selectedAccount = accounts.find((account) => account.account_id === accountId) || null;
 
   return (
-    <header className="relative z-[11000] shrink-0 border-b border-white/10 bg-[#333333] px-1 py-2 dark:border-white/10 dark:bg-[#333333] lg:px-1.5">
+    <header className="relative z-[11000] shrink-0 border-b border-black/10 bg-[var(--topbar-bg)] px-1 py-2 text-[var(--color-ink)] dark:border-white/10 lg:px-1.5">
       {isDashboard ? (
         <DashboardTopbarControls
           accountId={accountId}
@@ -50,10 +50,10 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
       ) : (
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-white/65">
+            <p className="text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-black/55 dark:text-white/65">
               {accountId ? `Account ${accountId}` : 'No Account Selected'}
             </p>
-            <h1 className="mt-1 text-[1.8rem] font-semibold tracking-[-0.04em] text-white">
+            <h1 className="mt-1 text-[1.8rem] font-semibold tracking-[-0.04em] text-[#0d0d0d] dark:text-white">
               {titleMap[activeView]}
             </h1>
           </div>
@@ -87,6 +87,7 @@ function CalendarTopbarControls({
 }) {
   const queryClient = useQueryClient();
   const selectedDay = usePrototypeStore((state) => state.selectedDay);
+  const selectDay = usePrototypeStore((state) => state.selectDay);
   const calendarVisibleMonth = usePrototypeStore((state) => state.calendarVisibleMonth);
   const calendarVisibleYear = usePrototypeStore((state) => state.calendarVisibleYear);
   const setCalendarVisibleMonthYear = usePrototypeStore((state) => state.setCalendarVisibleMonthYear);
@@ -99,14 +100,26 @@ function CalendarTopbarControls({
 
   useEffect(() => {
     if (calendarVisibleMonth != null && calendarVisibleYear != null) return;
-    const seedDay = selectedDay || summaries?.[summaries.length - 1]?.day;
-    if (!seedDay) return;
-    const date = new Date(`${seedDay}T00:00:00`);
-    setCalendarVisibleMonthYear(date.getMonth(), date.getFullYear());
-  }, [calendarVisibleMonth, calendarVisibleYear, selectedDay, setCalendarVisibleMonthYear, summaries]);
+    const today = new Date();
+    setCalendarVisibleMonthYear(today.getMonth(), today.getFullYear());
+  }, [calendarVisibleMonth, calendarVisibleYear, setCalendarVisibleMonthYear]);
 
   const monthValue = calendarVisibleMonth ?? new Date().getMonth();
   const yearValue = calendarVisibleYear ?? new Date().getFullYear();
+  const visibleSummaries = useMemo(() => {
+    return (summaries || []).filter((summary) => {
+      const day = new Date(`${summary.day}T00:00:00`);
+      return day.getMonth() === monthValue && day.getFullYear() === yearValue;
+    });
+  }, [monthValue, summaries, yearValue]);
+  const monthlyNetPnl = useMemo(
+    () => visibleSummaries.reduce((sum, item) => sum + Number(item.pnl || 0), 0),
+    [visibleSummaries],
+  );
+  const monthlyTradedDays = useMemo(
+    () => visibleSummaries.filter((item) => item.trade_count > 0).length,
+    [visibleSummaries],
+  );
 
   const monthOptions = useMemo(
     () =>
@@ -133,6 +146,7 @@ function CalendarTopbarControls({
   const shiftMonth = (delta: number) => {
     const nextDate = new Date(yearValue, monthValue + delta, 1);
     setCalendarVisibleMonthYear(nextDate.getMonth(), nextDate.getFullYear());
+    selectDay(`${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-01`);
   };
 
   return (
@@ -141,13 +155,21 @@ function CalendarTopbarControls({
         <CalendarNavButton label="<" onClick={() => shiftMonth(-1)} />
         <CalendarTopbarSelect
           value={String(monthValue)}
-          onChange={(value) => setCalendarVisibleMonthYear(Number(value), yearValue)}
+          onChange={(value) => {
+            const nextMonth = Number(value);
+            setCalendarVisibleMonthYear(nextMonth, yearValue);
+            selectDay(`${yearValue}-${String(nextMonth + 1).padStart(2, '0')}-01`);
+          }}
           options={monthOptions}
           minWidthClass="min-w-[126px]"
         />
         <CalendarTopbarSelect
           value={String(yearValue)}
-          onChange={(value) => setCalendarVisibleMonthYear(monthValue, Number(value))}
+          onChange={(value) => {
+            const nextYear = Number(value);
+            setCalendarVisibleMonthYear(monthValue, nextYear);
+            selectDay(`${nextYear}-${String(monthValue + 1).padStart(2, '0')}-01`);
+          }}
           options={yearOptions}
           minWidthClass="min-w-[90px]"
         />
@@ -162,10 +184,19 @@ function CalendarTopbarControls({
               queryClient.invalidateQueries(['prototype-calendar-day-detail', accountId]),
             ]);
           }}
-          className="h-[30px] rounded-[10px] border border-white/15 bg-white px-2.5 text-sm font-semibold leading-none text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+          className="h-[30px] rounded-[10px] border border-black/10 bg-white px-2.5 text-sm font-semibold leading-none text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
         >
           {isFetching ? 'Refreshing…' : 'Refresh'}
         </button>
+        <div className="ml-2 flex items-center gap-2 rounded-[12px] border border-black/10 bg-[#1f1f1f] px-3 py-1.5 text-white dark:border-white/10 dark:bg-[#1f1f1f]">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">Monthly Stats</span>
+          <span className="rounded-full bg-[#2b2b2b] px-2.5 py-1 text-[12px] font-semibold text-[#7ef0a0]">
+            {formatCompactCalendarCurrency(monthlyNetPnl)}
+          </span>
+          <span className="rounded-full bg-[#2b2b2b] px-2.5 py-1 text-[12px] font-semibold text-white">
+            {monthlyTradedDays} days
+          </span>
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 justify-self-end">
         <AccountSelectControl
@@ -178,6 +209,15 @@ function CalendarTopbarControls({
       </div>
     </div>
   );
+}
+
+function formatCompactCalendarCurrency(value: number) {
+  const sign = value < 0 ? '-' : '';
+  const absolute = Math.abs(value);
+  if (absolute >= 1000) {
+    return `${sign}$${(absolute / 1000).toFixed(2)}K`;
+  }
+  return `${sign}$${absolute.toFixed(2)}`;
 }
 
 function DashboardTopbarControls({
@@ -296,8 +336,8 @@ function DashboardTopbarControls({
       onClick={() => setShowAdvanced((value) => !value)}
       className={`h-[22px] w-full rounded-[10px] border px-1.5 text-sm font-semibold leading-none transition ${
         advancedVisible
-          ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-          : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
+          ? 'border-[#ff5900] bg-[#ff5900] text-white dark:border-[#ff5900] dark:bg-[#ff5900] dark:text-white'
+          : 'border-black/10 bg-white text-[#0d0d0d] hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white'
       }`}
     >
       Advanced
@@ -374,7 +414,7 @@ function CalendarNavButton({ label, onClick }: { label: string; onClick: () => v
     <button
       type="button"
       onClick={onClick}
-      className="h-[32px] w-[38px] rounded-[10px] border border-white/15 bg-white px-0 text-base font-semibold leading-none text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+      className="h-[32px] w-[38px] rounded-[10px] border border-black/10 bg-white px-0 text-base font-semibold leading-none text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
     >
       {label}
     </button>
@@ -397,7 +437,7 @@ function CalendarTopbarSelect({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-[30px] w-full appearance-none rounded-[10px] border border-white/15 bg-white px-2.5 pr-6 text-sm font-semibold leading-none text-black outline-none transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/15 dark:bg-black dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+        className="h-[30px] w-full appearance-none rounded-[10px] border border-black/10 bg-white px-2.5 pr-6 text-sm font-semibold leading-none text-[#0d0d0d] outline-none transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/15 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -458,15 +498,15 @@ function CompactFilterSelect({
           }}
           className={`flex h-[22px] w-full items-center justify-between rounded-[10px] border px-1.5 text-[13px] font-semibold leading-none outline-none transition ${
             active
-              ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-              : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
+              ? 'border-[#ff5900] bg-[#ff5900] text-white dark:border-[#ff5900] dark:bg-[#ff5900] dark:text-white'
+              : 'border-black/10 bg-white text-[#0d0d0d] hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white'
           }`}
         >
           <span className="truncate">{selectedLabel}</span>
           <ChevronDown />
         </button>
         {isOpen ? (
-          <div className="absolute left-0 top-full z-[10050] max-h-64 w-full overflow-y-auto rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
+          <div className="absolute left-0 top-full z-[10050] max-h-64 w-full overflow-y-auto rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#1a1a1a]">
             {options.map(([optionValue, optionLabel]) => (
               <DropdownOption
                 key={`${label}-${optionValue}`}
@@ -513,7 +553,7 @@ function AccountSelectControl({
           if (event.target.value) onChooseAccount(event.target.value);
         }}
         onMouseEnter={(event) => maybeOpenHoveredSelect(event.currentTarget)}
-        className="h-[22px] w-full appearance-none rounded-[10px] border border-[#ff5900] bg-[#ff5900] px-1.5 text-sm font-semibold leading-none text-white outline-none shadow-[0_12px_28px_rgba(255,89,0,0.18)]"
+        className="h-[22px] w-full appearance-none rounded-[10px] border border-[#ff5900] bg-[#ff5900] px-1.5 text-sm font-semibold leading-none text-white outline-none shadow-[0_12px_28px_rgba(255,89,0,0.2)]"
       >
         {!accountId ? <option value="">Select Account</option> : null}
         {accounts.map((item) => (
@@ -575,15 +615,15 @@ function BucketOrCustomFilter({
           }}
           className={`flex h-[22px] w-full items-center justify-between rounded-[10px] border px-1.5 text-[13px] font-semibold leading-none outline-none transition ${
             active
-              ? 'border-black bg-black text-white dark:border-white dark:bg-white dark:text-black'
-              : 'border-black/10 bg-white text-black hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]'
+              ? 'border-[#ff5900] bg-[#ff5900] text-white dark:border-[#ff5900] dark:bg-[#ff5900] dark:text-white'
+              : 'border-black/10 bg-white text-[#0d0d0d] hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white'
           }`}
         >
           <span className="truncate">{selectedLabel}</span>
           <ChevronDown />
         </button>
         {isOpen ? (
-          <div className="absolute left-0 top-full z-[10050] w-full rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#090909]">
+          <div className="absolute left-0 top-full z-[10050] w-full rounded-[11px] border border-black/10 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:border-white/10 dark:bg-[#1a1a1a]">
             {options.map(([optionValue, optionLabel]) => (
               <DropdownOption
                 key={`${label}-${optionValue}`}
@@ -612,7 +652,7 @@ function BucketOrCustomFilter({
                   value={customMin}
                   onChange={(event) => onChange(serializeCustomRange(event.target.value, customMax))}
                   placeholder="Min"
-                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-[#0d0d0d] outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
                 />
                 <input
                   type="text"
@@ -620,7 +660,7 @@ function BucketOrCustomFilter({
                   value={customMax}
                   onChange={(event) => onChange(serializeCustomRange(customMin, event.target.value))}
                   placeholder="Max"
-                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-black outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+                  className="h-[22px] w-full rounded-[10px] border border-black/10 bg-white px-1.5 text-[13px] font-semibold leading-none text-[#0d0d0d] outline-none placeholder:text-black/45 hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:placeholder:text-white/40 dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
                 />
               </div>
             ) : null}
@@ -690,8 +730,8 @@ function DropdownOption({
       }}
       className={`flex w-full items-center rounded-[8px] px-1.5 py-0.5 text-left text-[13px] font-semibold transition ${
         active
-          ? 'bg-black text-white dark:bg-white dark:text-black'
-          : 'text-black hover:bg-[#ff5900] hover:text-white dark:text-white dark:hover:bg-[#ff5900] dark:hover:text-white'
+          ? 'bg-[#ff5900] text-white dark:bg-[#ff5900] dark:text-white'
+          : 'text-[#0d0d0d] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:text-white dark:hover:bg-[#ff5900] dark:hover:text-white'
       }`}
     >
       {label}

@@ -203,9 +203,9 @@ function AccountRequiredState({
   isCreatingDemo: boolean;
 }) {
   return (
-    <section className="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-8 dark:border-white/10 dark:bg-[#060606]">
+    <section className="rounded-[28px] border border-dashed border-black/12 bg-white px-6 py-8 text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white">
       <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/50 dark:text-white/50">Account Needed</p>
-      <h2 className="mt-3 text-[1.8rem] font-semibold tracking-[-0.04em] text-black dark:text-white">
+      <h2 className="mt-3 text-[1.8rem] font-semibold tracking-[-0.04em] text-[#0d0d0d] dark:text-white">
         {view === 'dashboard' ? 'Select an account to load the dashboard' : 'Select an account to load this section'}
       </h2>
       <p className="mt-3 max-w-2xl text-sm leading-6 text-black/70 dark:text-white/70">
@@ -215,14 +215,14 @@ function AccountRequiredState({
         <button
           type="button"
           onClick={onOpenAccounts}
-          className="rounded-full bg-black px-5 py-3 text-sm font-semibold text-white dark:bg-white dark:text-black"
+          className="rounded-full bg-[#ff5900] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:hover:text-white"
         >
           {accounts.length ? 'Select or Add Account' : 'Add Account'}
         </button>
         <button
           type="button"
           onClick={onCreateDemo}
-          className="rounded-full border border-black/10 px-5 py-3 text-sm font-semibold text-black dark:border-white/10 dark:text-white"
+          className="rounded-full border border-black/10 bg-white px-5 py-3 text-sm font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/10 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
         >
           {isCreatingDemo ? 'Creating Demo…' : 'Create Demo Account'}
         </button>

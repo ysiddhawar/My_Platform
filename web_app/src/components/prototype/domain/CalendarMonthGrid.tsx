@@ -1,12 +1,14 @@
 import type { CalendarDaySummary } from '@/types/prototype';
-import { formatCurrency } from '@/utils/format';
+import { formatCurrency, formatPercent, formatNumber } from '@/utils/format';
 
 type CalendarMonthGridProps = {
   summaries: CalendarDaySummary[];
   selectedDay: string | null;
-  onSelectDay: (day: string) => void;
+  onHoverDay: (day: string, anchorRect: DOMRect) => void;
+  onLeaveDay: () => void;
   visibleMonth: number;
   visibleYear: number;
+  statsByDay: Record<string, { rMultiple: number; winRate: number }>;
 };
 
 const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -38,7 +40,7 @@ function tone(summary: CalendarDaySummary): { className: string } {
   };
 }
 
-export function CalendarMonthGrid({ summaries, selectedDay, onSelectDay, visibleMonth, visibleYear }: CalendarMonthGridProps) {
+export function CalendarMonthGrid({ summaries, selectedDay, onHoverDay, onLeaveDay, visibleMonth, visibleYear, statsByDay }: CalendarMonthGridProps) {
   if (summaries.length === 0) {
     return null;
   }
@@ -61,33 +63,40 @@ export function CalendarMonthGrid({ summaries, selectedDay, onSelectDay, visible
   return (
       <div className="grid grid-cols-7 gap-2.5">
         {weekdayLabels.map((label) => (
-          <div key={label} className="px-1 py-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-black/55 dark:text-white/65">
+          <div key={label} className="px-1 py-0.5 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-black/55 dark:text-white/65">
             {label}
           </div>
         ))}
         {cells.map((cell, index) =>
           cell.type === 'blank' ? (
-            <div key={`blank-${index}`} className="min-h-[96px] rounded-[14px] border border-transparent" />
+            <div key={`blank-${index}`} className="h-[96px] rounded-[14px] border border-transparent" />
           ) : (() => {
             const cellTone = cell.summary ? tone(cell.summary) : { className: 'border-black/70 bg-transparent text-black dark:border-white/75 dark:text-white' };
             const selected = cell.isoDay === selectedDay;
+            const dayStats = statsByDay[cell.isoDay] || { rMultiple: 0, winRate: 0 };
             return (
             <button
               key={cell.isoDay}
               type="button"
-              onClick={() => onSelectDay(cell.isoDay)}
-              className={`group min-h-[96px] rounded-[14px] border px-2.5 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-[#ff5900] hover:bg-[#ff5900] ${
+              onMouseEnter={(event) => onHoverDay(cell.isoDay, event.currentTarget.getBoundingClientRect())}
+              onMouseLeave={onLeaveDay}
+              className={`group h-[96px] rounded-[14px] border px-2.5 py-2.5 text-left transition hover:-translate-y-0.5 hover:border-[#ff5900] hover:bg-[#ff5900] ${
                 selected
-                  ? 'border-black bg-black text-white ring-2 ring-black/20 dark:border-white dark:bg-white dark:text-black dark:ring-white/40'
+                  ? 'border-[#ff5900] bg-[#ff5900] text-white ring-2 ring-[#ff5900]/30 dark:border-[#ff5900] dark:bg-[#ff5900] dark:text-white dark:ring-[#ff5900]/35'
                   : cellTone.className
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className={`text-[13px] font-semibold ${selected ? 'text-white dark:text-black' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.dayNumber}</span>
+                <span className={`text-[13px] font-bold ${selected ? 'text-white' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.dayNumber}</span>
               </div>
-              <p className={`mt-3 text-[13px] font-semibold ${selected ? 'text-white dark:text-black' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.summary ? formatCurrency(Number(cell.summary.pnl || 0)) : '—'}</p>
-              <p className={`mt-1 text-[11px] ${selected ? 'text-white/80 dark:text-black/75' : 'text-black/70 dark:text-white/70 group-hover:text-black dark:group-hover:text-white'}`}>
+              <p className={`mt-3 text-[13px] font-bold ${selected ? 'text-white' : 'group-hover:text-black dark:group-hover:text-white'}`}>{cell.summary ? formatCurrency(Number(cell.summary.pnl || 0)) : '—'}</p>
+              <p className={`mt-1 text-[11px] font-bold ${selected ? 'text-white/80' : 'text-black/70 dark:text-white/70 group-hover:text-black dark:group-hover:text-white'}`}>
                 {cell.summary && cell.summary.trade_count > 0 ? `${cell.summary.trade_count} trades` : 'No trade'}
+              </p>
+              <p className={`mt-1 text-[10px] font-bold ${selected ? 'text-white/75' : 'text-black/65 dark:text-white/70 group-hover:text-black dark:group-hover:text-white'}`}>
+                {cell.summary && cell.summary.trade_count > 0
+                  ? `${formatNumber(dayStats.rMultiple)}R · ${formatPercent(dayStats.winRate)}`
+                  : '—R · —%'}
               </p>
             </button>
           )})(),

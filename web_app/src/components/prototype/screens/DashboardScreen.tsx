@@ -1655,13 +1655,7 @@ export function DashboardScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
   const dashboardGroupOrder = usePrototypeStore((state) => state.dashboardGroupOrder);
   const dashboardMetricGroup = usePrototypeStore((state) => state.dashboardMetricGroup);
-  const dashboardMetricSize = usePrototypeStore((state) => state.dashboardMetricSize);
-  const setDashboardGroupOrder = usePrototypeStore((state) => state.setDashboardGroupOrder);
-  const moveMetricToGroup = usePrototypeStore((state) => state.moveMetricToGroup);
-  const cycleMetricSize = usePrototypeStore((state) => state.cycleMetricSize);
-  const resetDashboardLayout = usePrototypeStore((state) => state.resetDashboardLayout);
   const dashboardTopWidgetVisibility = usePrototypeStore((state) => state.dashboardTopWidgetVisibility);
-  const toggleTopWidget = usePrototypeStore((state) => state.toggleTopWidget);
   const dashboardFilters = usePrototypeStore((state) => state.dashboardFilters);
   const setDashboardFilters = usePrototypeStore((state) => state.setDashboardFilters);
   const dashboardFilterPresets = usePrototypeStore((state) => state.dashboardFilterPresets);
@@ -1671,7 +1665,6 @@ export function DashboardScreen() {
     enabled: Boolean(accountId),
   });
   const { data: chartCatalog } = useQuery(['prototype-chart-catalog'], fetchChartCatalog);
-  const [widgetModalOpen, setWidgetModalOpen] = useState(false);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const now = useMemo(() => new Date(), []);
   const {
@@ -1955,21 +1948,6 @@ export function DashboardScreen() {
   const pnlCurve = useMemo(() => buildDailyNetCurve(filteredData?.trades || []), [filteredData]);
   const timePatternInsights = useMemo(() => buildTimePatternInsights(filteredData?.trades || []), [filteredData]);
   const compactHeatmap = useMemo(() => buildCompactTimeHeatmap(timePatternInsights), [timePatternInsights]);
-  const widgetCatalog = useMemo(() => {
-    const source = chartCatalog?.top_widgets || [
-      { key: 'trades', label: 'Total Completed Trades', helper: 'All records in the current filtered view.' },
-      { key: 'net_pnl', label: 'Net Return $', helper: 'After all costs.' },
-      { key: 'win_rate', label: 'Wins Percent', helper: 'Closed trades only.' },
-      { key: 'platform_time', label: 'Platform Time', helper: 'Tracked session time.' },
-      { key: 'missed_opportunities', label: 'Missed Opportunities', helper: 'Recorded but unexecuted setups.' },
-    ];
-    const base = source.filter((widget) => widget.key !== 'win_rate');
-    const extras = [
-      { key: 'payoff_ratio', label: 'Payoff Ratio', helper: 'Average winner divided by average loser.' },
-    ];
-    return [...base, ...extras.filter((item) => !base.some((widget) => widget.key === item.key))];
-  }, [chartCatalog]);
-
   if (isLoading) {
     return <p className="text-sm text-gray-600 dark:text-slate-400">Loading dashboard…</p>;
   }
@@ -2175,28 +2153,14 @@ export function DashboardScreen() {
 
   return (
     <div className="space-y-8 text-black dark:text-white">
-      <section className="sticky top-0 z-[100] -mx-5 border-y border-black/10 bg-white px-4 py-0.5 text-black shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-black dark:text-white md:-mx-8 md:px-8 xl:-mx-10 xl:px-10">
+      <section className="sticky top-0 z-[100] -mx-5 border-y border-black/10 bg-[var(--topbar-bg)] px-4 py-0.5 text-[var(--color-ink)] shadow-[0_18px_44px_rgba(15,23,42,0.08)] dark:border-white/10 md:-mx-8 md:px-8 xl:-mx-10 xl:px-10">
         <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            onClick={resetDashboardLayout}
-            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
-          >
-            Reset Dashboard Layout
-          </button>
-          <button
-            type="button"
-            onClick={() => setWidgetModalOpen(true)}
-            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
-          >
-            Select Upper Widgets
-          </button>
           <button
             type="button"
             onClick={() => setDashboardFilters({
               ...defaultDashboardFilters,
             })}
-            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 bg-white px-3 py-[2px] text-[13px] font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/20 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
           >
             Reset Filters
           </button>
@@ -2206,7 +2170,7 @@ export function DashboardScreen() {
               const name = window.prompt('Preset name');
               if (name) saveDashboardFilterPreset(name, dashboardFilters);
             }}
-            className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+            className="rounded-full border border-black/15 bg-white px-3 py-[2px] text-[13px] font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/20 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
           >
             Save Preset
           </button>
@@ -2228,7 +2192,7 @@ export function DashboardScreen() {
                 const preset = dashboardFilterPresets.find((item) => item.name === selectedPresetName);
                 if (preset) setDashboardFilters(preset.filters);
               }}
-              className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+              className="rounded-full border border-black/15 bg-white px-3 py-[2px] text-[13px] font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/20 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
             >
               Apply Preset
             </button>
@@ -2239,7 +2203,7 @@ export function DashboardScreen() {
                 deleteDashboardFilterPreset(selectedPresetName);
                 setSelectedPresetName('');
               }}
-              className="rounded-full border border-black/15 px-3 py-[2px] text-[13px] font-semibold text-black transition hover:border-[#ff5900] hover:text-[#ff5900] dark:border-white/20 dark:text-white dark:hover:border-[#ff5900] dark:hover:text-[#ff5900]"
+              className="rounded-full border border-black/15 bg-white px-3 py-[2px] text-[13px] font-semibold text-[#0d0d0d] transition hover:border-[#ff5900] hover:bg-[#ff5900] hover:text-[#0d0d0d] dark:border-white/20 dark:bg-[#1a1a1a] dark:text-white dark:hover:border-[#ff5900] dark:hover:bg-[#ff5900] dark:hover:text-white"
             >
               Delete Preset
             </button>
@@ -2372,34 +2336,11 @@ export function DashboardScreen() {
       <section className="grid gap-6">
         {metricsLoading ? <p className="text-sm text-black/70 dark:text-white/70">Loading metric catalog…</p> : null}
 
-        {displayedSections.map((section, sectionIndex) => {
+        {displayedSections.map((section) => {
           const populated = section.keys.filter((key) => mergedResults[key] != null).length;
           return (
             <div
               key={section.title}
-              draggable
-              onDragStart={(event) => event.dataTransfer.setData('text/group-index', String(sectionIndex))}
-              onDragOver={(event) => {
-                event.preventDefault();
-                if (event.dataTransfer.types.includes('text/metric-key')) {
-                  event.dataTransfer.dropEffect = 'move';
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const metricKey = event.dataTransfer.getData('text/metric-key');
-                const sourceIndex = Number(event.dataTransfer.getData('text/group-index'));
-                if (metricKey) {
-                  moveMetricToGroup(metricKey, section.title);
-                  return;
-                }
-                if (Number.isFinite(sourceIndex) && sourceIndex !== sectionIndex) {
-                  const next = [...displayedSections.map((item) => item.title)];
-                  const [moved] = next.splice(sourceIndex, 1);
-                  next.splice(sectionIndex, 0, moved);
-                  setDashboardGroupOrder(next);
-                }
-              }}
               className="rounded-[28px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]"
             >
               <div className="flex items-center justify-between gap-3">
@@ -2434,11 +2375,7 @@ export function DashboardScreen() {
                 {section.keys.filter((key) => !chartOnlyMetrics.has(key) && key !== 'trade_count').map((key) => {
                   const value = mergedResults[key];
                   return (
-                    <div
-                      key={key}
-                      draggable
-                      onDragStart={(event) => event.dataTransfer.setData('text/metric-key', key)}
-                    >
+                    <div key={key}>
                       <MetricCard
                         label={humanizeKey(key)}
                         value={extractMetricValue(key, value)}
@@ -2453,15 +2390,6 @@ export function DashboardScreen() {
           );
         })}
       </section>
-
-      {widgetModalOpen ? (
-        <WidgetSelectionModal
-          widgets={widgetCatalog}
-          visibility={dashboardTopWidgetVisibility}
-          onToggle={toggleTopWidget}
-          onClose={() => setWidgetModalOpen(false)}
-        />
-      ) : null}
 
     </div>
   );
@@ -2494,61 +2422,5 @@ function FilterSelect({
         ))}
       </select>
     </label>
-  );
-}
-
-function WidgetSelectionModal({
-  widgets,
-  visibility,
-  onToggle,
-  onClose,
-}: {
-  widgets: Array<{ key: string; label: string; helper?: string | null }>;
-  visibility: Record<string, boolean>;
-  onToggle: (widgetKey: string) => void;
-  onClose: () => void;
-}) {
-  const allSelected = widgets.every((widget) => visibility[widget.key] !== false);
-  return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="max-h-[82vh] w-full max-w-3xl overflow-y-auto rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]" onClick={(event) => event.stopPropagation()}>
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 bg-white pb-4 dark:bg-[#060606]">
-          <div>
-            <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-white/55">Upper Widgets</p>
-            <h3 className="mt-2 text-[1.5rem] font-semibold tracking-[-0.04em] text-black dark:text-white">Choose your dashboard summary widgets</h3>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => onToggle('__all__')}
-              className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-black dark:border-white/10 dark:text-white"
-            >
-              {allSelected ? 'Deselect All' : 'Select All'}
-            </button>
-            <button type="button" onClick={onClose} className="rounded-full border border-black/10 px-4 py-2 text-sm font-semibold text-black dark:border-white/10 dark:text-white">
-              Close
-            </button>
-          </div>
-        </div>
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {widgets.map((widget) => (
-            <label
-              key={widget.key}
-              className="flex items-center justify-between rounded-[18px] border border-black/10 px-4 py-3 text-sm font-medium text-black dark:border-white/10 dark:text-white"
-            >
-              <span>
-                <span className="block">{widget.label}</span>
-                {widget.helper ? <span className="mt-1 block text-xs font-normal text-black/55 dark:text-white/55">{widget.helper}</span> : null}
-              </span>
-              <input
-                type="checkbox"
-                checked={visibility[widget.key] !== false}
-                onChange={() => onToggle(widget.key)}
-              />
-            </label>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }

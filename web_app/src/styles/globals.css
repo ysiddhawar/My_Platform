@@ -6,9 +6,15 @@
 
 :root {
   color-scheme: light;
-  --page-bg: #f5f5f7;
-  --color-ink: #000000;
+  --page-bg: #ffffff;
+  --color-ink: #0d0d0d;
   --color-muted: #4b5563;
+  --sidebar-bg: #e6e6e6;
+  --topbar-bg: #e6e6e6;
+  --hover-bg: #ff5900;
+  --hover-ink: #0d0d0d;
+  --selected-bg: #ff5900;
+  --selected-ink: #ffffff;
   --hero-accent: #355f87;
   --theme-surface: rgba(255, 255, 255, 0.9);
   --theme-border: rgba(0, 0, 0, 0.08);
@@ -44,9 +50,15 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --page-bg: #000000;
+  --page-bg: #1a1a1a;
   --color-ink: #ffffff;
   --color-muted: #cbd5e1;
+  --sidebar-bg: #333333;
+  --topbar-bg: #333333;
+  --hover-bg: #ff5900;
+  --hover-ink: #ffffff;
+  --selected-bg: #ff5900;
+  --selected-ink: #ffffff;
   --hero-accent: #6a5cff;
   --theme-surface: rgba(51, 51, 51, 0.94);
   --theme-border: rgba(255, 255, 255, 0.08);
