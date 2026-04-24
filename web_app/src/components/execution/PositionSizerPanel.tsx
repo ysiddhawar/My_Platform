@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { useMutation, useQuery } from 'react-query';
 
 import { endpoints } from '@/api/endpoints';
 import { Panel } from '@/components/ui/Panel';
@@ -44,7 +44,6 @@ const defaultPlannerState: PlannerState = {
 };
 
 export function PositionSizerPanel() {
-  const queryClient = useQueryClient();
   const [planner, setPlanner] = useState<PlannerState>(defaultPlannerState);
   const [appDisciplineMode, setAppDisciplineMode] = useState(true);
   const [toolDisciplineMode, setToolDisciplineMode] = useState(true);
@@ -97,15 +96,11 @@ export function PositionSizerPanel() {
     });
   });
 
-  const tradeMutation = useMutation(async () => {
-    return endpoints.recordFilledTrade({
+  const proceedMutation = useMutation(async () => {
+    return endpoints.prepareOrderTicket({
       ...planner,
       selected_checklist: planner.selected_checklist,
     });
-  }, {
-    onSuccess: () => {
-      queryClient.invalidateQueries('journal-trades');
-    }
   });
 
   const plan = previewQuery.data?.position_plan;
@@ -159,13 +154,13 @@ export function PositionSizerPanel() {
     updateConfigMutation.mutate({ appEnabled: appDisciplineMode, toolEnabled: checked });
   };
 
-  const handleTrade = () => {
+  const handleProceed = () => {
     if (disciplineEnabled && missingFields.length > 0) {
       setAttemptedSubmit(true);
       setActiveField((missingFields[0] as 'strategy' | 'probability' | 'checklist') || 'strategy');
       return;
     }
-    tradeMutation.mutate();
+    proceedMutation.mutate();
   };
 
   const checklistAllSelected = selectedStrategy
@@ -174,7 +169,7 @@ export function PositionSizerPanel() {
     : false;
 
   return (
-    <Panel title="Unified Position Sizer" subtitle="Live trade planning, discipline capture, and execution gating" className="h-full">
+    <Panel title="Unified Position Sizer" subtitle="Live trade planning, discipline capture, and broker handoff gating" className="h-full">
       <div className="space-y-5">
         <div className="grid gap-3 lg:grid-cols-3">
           <label className="text-sm text-slate-300">
@@ -307,22 +302,25 @@ export function PositionSizerPanel() {
           <LineInfo colorClass="bg-rose-400" title="Stop Loss Line" detail={plan ? `Risk ${plan.risk_amount.toFixed(2)} with brokerage/slippage considered` : 'Waiting for valid prices'} />
           <LineInfo colorClass="bg-emerald-400" title="Target Line" detail={plan ? `Projected reward ${plan.reward_amount.toFixed(2)}` : 'Waiting for target price'} />
           <LineInfo colorClass="bg-amber-400" title="Minimum Target Line" detail={plan?.minimum_target_price ? `Required price ${Number(plan.minimum_target_price).toFixed(4)} | reward ${Number(plan.minimum_target_reward || 0).toFixed(2)}` : 'Visible after strategy, probability, and checklist are selected'} />
-          <LineInfo colorClass="bg-fuchsia-400" title="Checklist State" detail={disciplineEnabled ? (checklistAllSelected ? 'All mandatory criteria selected' : 'Trade allowed, but incomplete checklist will be recorded for AI') : 'Discipline mode disabled'} />
-          <LineInfo colorClass="bg-cyan-400" title="Engine Alerts" detail={(disciplineState?.alerts || []).join(' ') || 'No active execution alerts'} />
+          <LineInfo colorClass="bg-fuchsia-400" title="Checklist State" detail={disciplineEnabled ? (checklistAllSelected ? 'All mandatory criteria selected' : 'Broker ticket allowed, but incomplete checklist will be recorded for AI') : 'Discipline mode disabled'} />
+          <LineInfo colorClass="bg-cyan-400" title="Engine Alerts" detail={(disciplineState?.alerts || []).join(' ') || 'No active broker handoff alerts'} />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <button
             className={`rounded-xl px-4 py-2 text-sm font-semibold text-white ${disciplineEnabled && missingFields.length ? 'cursor-not-allowed bg-slate-700' : 'bg-accent hover:bg-teal-500'}`}
-            onClick={handleTrade}
+            onClick={handleProceed}
           >
-            {tradeMutation.isLoading ? 'Recording Trade...' : 'Trade'}
+            {proceedMutation.isLoading ? 'Preparing Ticket...' : 'Proceed'}
           </button>
-          {tradeMutation.data?.data?.result?.execution_payload?.trade_id ? (
-            <span className="text-xs text-slate-400">Trade recorded.</span>
+          {proceedMutation.data?.data?.result?.status === 'ready' ? (
+            <span className="text-xs text-slate-400">Broker order ticket prepared.</span>
           ) : null}
           {attemptedSubmit && missingFields.length > 0 ? (
-            <p className="text-sm text-rose-300">Complete strategy/setup, probability, and checklist selection before placing the trade.</p>
+            <p className="text-sm text-rose-300">Complete strategy/setup, probability, and checklist selection before preparing the broker ticket.</p>
+          ) : null}
+          {proceedMutation.data?.data?.result?.launch?.message ? (
+            <p className="text-sm text-slate-400">{proceedMutation.data.data.result.launch.message}</p>
           ) : null}
         </div>
       </div>

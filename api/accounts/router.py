@@ -36,12 +36,14 @@ class ConnectMt5FileBridgeRequest(BaseModel):
     broker_id: str | None = None
     inbox_dir: str
     archive_dir: str | None = None
+    outbox_dir: str | None = None
     poll_interval_seconds: float = Field(default=0.25, gt=0)
 
 
 class ValidateMt5FileBridgeRequest(BaseModel):
     inbox_dir: str
     archive_dir: str | None = None
+    outbox_dir: str | None = None
 
 
 def _directory_state(path_value: str):
@@ -163,32 +165,46 @@ def validate_mt5_file_bridge(request: ValidateMt5FileBridgeRequest, user: dict =
     try:
         inbox_path = Path(request.inbox_dir).expanduser()
         archive_path = Path(request.archive_dir).expanduser() if request.archive_dir else inbox_path / "processed"
+        outbox_path = Path(request.outbox_dir).expanduser() if request.outbox_dir else inbox_path.parent / "outbox"
 
         warnings: list[str] = []
         instructions = [
-            "Point your MT5 bridge or EA export directory at the inbox path shown below.",
+            "For MT5, use a folder inside MetaTrader's shared Common Files directory so both the EA and MyPlatform can access it.",
+            "Point your MT5 bridge or EA event export directory at the inbox path shown below.",
+            "Point your MT5 bridge or EA command reader at the outbox path so it can surface the prepared order ticket inside MT5.",
             "Write one JSON file per event into the inbox directory.",
+            "Read one JSON file per prepared order ticket from the outbox directory.",
             "Keep the archive directory separate from the live inbox to avoid duplicate ingestion.",
             "Use the same broker and account mapping in MT5 and in MyPlatform.",
         ]
 
         inbox_ok, inbox_error = _validate_directory_access(str(inbox_path))
         archive_ok, archive_error = _validate_directory_access(str(archive_path))
+        outbox_ok, outbox_error = _validate_directory_access(str(outbox_path))
 
         if inbox_path == archive_path:
             warnings.append("Inbox and archive paths are the same. Use a separate archive directory to avoid reprocessing.")
+        if inbox_path == outbox_path:
+            warnings.append("Inbox and outbox paths are the same. Use a separate outbox directory so MT5 commands do not get ingested as broker events.")
+        if archive_path == outbox_path:
+            warnings.append("Archive and outbox paths are the same. Use a separate outbox directory for MT5 command files.")
         if not request.archive_dir:
             warnings.append("Archive directory not supplied. MyPlatform will default to an inbox/processed folder.")
+        if not request.outbox_dir:
+            warnings.append("Outbox directory not supplied. MyPlatform will default to a sibling outbox folder next to the inbox.")
 
-        problems = [message for message in [inbox_error, archive_error] if message]
+        problems = [message for message in [inbox_error, archive_error, outbox_error] if message]
         return {
-            "ok": inbox_ok and archive_ok and not problems,
+            "ok": inbox_ok and archive_ok and outbox_ok and not problems,
             "inbox_dir": str(inbox_path),
             "archive_dir": str(archive_path),
+            "outbox_dir": str(outbox_path),
             "inbox_exists": inbox_path.exists(),
             "archive_exists": archive_path.exists(),
+            "outbox_exists": outbox_path.exists(),
             "inbox_writable": os.access(inbox_path if inbox_path.exists() else inbox_path.parent, os.W_OK),
             "archive_writable": os.access(archive_path if archive_path.exists() else archive_path.parent, os.W_OK),
+            "outbox_writable": os.access(outbox_path if outbox_path.exists() else outbox_path.parent, os.W_OK),
             "warnings": warnings + problems,
             "instructions": instructions,
         }
@@ -237,6 +253,7 @@ def connect_mt5_file_bridge(
             broker_id=request.broker_id or account.broker_id,
             inbox_dir=request.inbox_dir,
             archive_dir=request.archive_dir,
+            outbox_dir=request.outbox_dir,
             poll_interval_seconds=request.poll_interval_seconds,
         )
     except HTTPException:

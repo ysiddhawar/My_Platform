@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from 'react-query';
+import { useMutation, useQuery } from 'react-query';
 
-import { fetchStrategies, previewPositionPlan, recordFilledTrade, updateExecutionConfig } from '@/api/prototype';
+import { fetchStrategies, prepareOrderTicket, previewPositionPlan, updateExecutionConfig } from '@/api/prototype';
 import { StatCard } from '@/components/prototype/domain/StatCard';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import type { StrategyRecord } from '@/types/prototype';
@@ -49,7 +49,6 @@ function detectMarketType(symbol: string): string {
 
 export function PositionSizerScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
-  const queryClient = useQueryClient();
   const [planner, setPlanner] = useState<PlannerState>(defaultPlannerState);
   const [riskPercent, setRiskPercent] = useState(1);
   const [appDisciplineMode, setAppDisciplineMode] = useState(true);
@@ -72,8 +71,8 @@ export function PositionSizerScreen() {
         app_discipline_mode_enabled: appDisciplineMode,
         position_sizer_discipline_enabled: toolDisciplineMode,
       },
-    });
-  }, [riskPercent, appDisciplineMode, toolDisciplineMode]);
+    }, accountId);
+  }, [riskPercent, appDisciplineMode, toolDisciplineMode, accountId]);
 
   const previewQuery = useQuery(
     ['prototype-position-preview', accountId, planner, marketType, riskPercent, appDisciplineMode, toolDisciplineMode],
@@ -87,23 +86,14 @@ export function PositionSizerScreen() {
     { keepPreviousData: true, enabled: Boolean(accountId) },
   );
 
-  const recordMutation = useMutation(
+  const proceedMutation = useMutation(
     () =>
-      recordFilledTrade({
+      prepareOrderTicket({
         account_id: accountId as string,
         broker_id: 'BROKER',
         market_type: marketType,
         ...planner,
       }),
-    {
-      onSuccess: async () => {
-        await Promise.all([
-          queryClient.invalidateQueries(['prototype-overview', accountId]),
-          queryClient.invalidateQueries(['prototype-trades', accountId]),
-          queryClient.invalidateQueries(['prototype-calendar-summaries', accountId]),
-        ]);
-      },
-    },
   );
 
   const disciplineEnabled = appDisciplineMode && toolDisciplineMode;
@@ -138,13 +128,13 @@ export function PositionSizerScreen() {
     setActiveField(null);
   };
 
-  const handleTrade = () => {
+  const handleProceed = () => {
     if (disciplineEnabled && missingFields.length > 0) {
       setAttemptedSubmit(true);
       setActiveField((missingFields[0] as 'strategy' | 'probability' | 'checklist') || 'strategy');
       return;
     }
-    recordMutation.mutate();
+    proceedMutation.mutate();
   };
 
   return (
@@ -278,23 +268,26 @@ export function PositionSizerScreen() {
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={handleTrade}
+              onClick={handleProceed}
               className={`inline-flex items-center rounded-full px-5 py-3 text-sm font-semibold ${
                 disciplineEnabled && missingFields.length > 0
                   ? 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
                   : 'bg-black text-white dark:bg-white dark:text-black'
               }`}
             >
-              {recordMutation.isLoading ? 'Recording…' : 'Trade'}
+              {proceedMutation.isLoading ? 'Preparing…' : 'Proceed'}
             </button>
             {attemptedSubmit && missingFields.length > 0 ? (
               <span className="text-sm text-rose-700 dark:text-rose-300">
-                Complete strategy, probability, and checklist before placing the trade.
+                Complete strategy, probability, and checklist before preparing the broker ticket.
               </span>
             ) : null}
-            {recordMutation.isSuccess ? <span className="text-sm text-emerald-700 dark:text-emerald-300">Trade recorded.</span> : null}
+            {proceedMutation.isSuccess ? <span className="text-sm text-emerald-700 dark:text-emerald-300">Broker order ticket prepared.</span> : null}
           </div>
-          {recordMutation.error instanceof Error ? <p className="mt-3 text-sm text-rose-700 dark:text-rose-300">{recordMutation.error.message}</p> : null}
+          {proceedMutation.data?.launch?.message ? (
+            <p className="mt-3 text-sm text-black/70 dark:text-white/70">{proceedMutation.data.launch.message}</p>
+          ) : null}
+          {proceedMutation.error instanceof Error ? <p className="mt-3 text-sm text-rose-700 dark:text-rose-300">{proceedMutation.error.message}</p> : null}
         </section>
 
         <div className="space-y-4">
@@ -310,7 +303,7 @@ export function PositionSizerScreen() {
             {disciplineState ? (
               <div className="mt-4 space-y-3">
                 <p className={`text-sm font-semibold ${disciplineState.blocked ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
-                  {disciplineState.blocked ? 'Blocked until required fields are filled.' : 'Ready for execution.'}
+                  {disciplineState.blocked ? 'Blocked until required fields are filled.' : 'Ready for broker handoff.'}
                 </p>
                 {(disciplineState.alerts || []).map((alert) => (
                   <div key={alert} className="rounded-[16px] border border-black/8 bg-gray-50 px-4 py-3 text-sm text-black dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white">

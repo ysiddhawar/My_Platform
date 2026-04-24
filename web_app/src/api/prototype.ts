@@ -2,6 +2,8 @@ import { apiClient, getStoredAuthToken, setStoredAuthToken } from '@/api/client'
 import type {
   AccountSummary,
   AccountIntegration,
+  AIDiagnosis,
+  AIInsightsResponse,
   BehaviorAnalysis,
   CalendarDayDetail,
   CalendarDaySummary,
@@ -13,6 +15,7 @@ import type {
   Mt5FileBridgeInput,
   MissedOpportunityRecord,
   OverviewData,
+  PreparedOrderTicketResult,
   SessionDailyTotal,
   StrategyRecord,
   TradeBundle,
@@ -35,6 +38,52 @@ const EMPTY_BEHAVIOR: BehaviorAnalysis = {
   time_intelligence: { features: {}, findings: [], strengths: [] },
   missed_opportunity_intelligence: { features: {}, findings: [], strengths: [] },
 };
+
+function buildDailyReturns(trades: TradeRecord[]): number[] {
+  const dailyPnls = new Map<string, number>();
+  trades
+    .filter((trade) => trade.is_closed)
+    .forEach((trade) => {
+      const dayKey = trade.exit_date || trade.entry_date || trade.exit_time?.slice(0, 10) || trade.entry_time?.slice(0, 10);
+      if (!dayKey) return;
+      dailyPnls.set(dayKey, (dailyPnls.get(dayKey) || 0) + Number(trade.net_pnl || 0));
+    });
+
+  return Array.from(dailyPnls.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([, pnl]) => pnl / 100000);
+}
+
+function buildStrategyMatrix(trades: TradeRecord[]) {
+  const closed = trades.filter((trade) => trade.is_closed);
+  const grouped = new Map<string, Map<string, number>>();
+
+  closed.forEach((trade) => {
+    const label = String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified');
+    const dayKey = trade.exit_date || trade.entry_date || trade.exit_time?.slice(0, 10) || trade.entry_time?.slice(0, 10);
+    if (!dayKey) return;
+    const bucket = grouped.get(label) || new Map<string, number>();
+    bucket.set(dayKey, (bucket.get(dayKey) || 0) + Number(trade.net_pnl || 0) / 100000);
+    grouped.set(label, bucket);
+  });
+
+  return Object.fromEntries(
+    Array.from(grouped.entries()).map(([label, values]) => [
+      label,
+      Array.from(values.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([, value]) => value),
+    ]),
+  );
+}
+
+function pickMetrics(results: Record<string, unknown>, keys: string[]): Record<string, unknown> {
+  return Object.fromEntries(
+    keys
+      .filter((key) => results[key] !== undefined && results[key] !== null)
+      .map((key) => [key, results[key]]),
+  );
+}
 
 async function createDemoSession(): Promise<void> {
   const response = await apiClient.post('/auth/demo-session', {
@@ -149,6 +198,7 @@ export async function connectMt5FileBridge(payload: Mt5FileBridgeInput): Promise
       broker_id: payload.broker_id,
       inbox_dir: payload.inbox_dir,
       archive_dir: payload.archive_dir,
+      outbox_dir: payload.outbox_dir,
       poll_interval_seconds: payload.poll_interval_seconds ?? 0.25,
     }),
   );
@@ -202,14 +252,18 @@ export async function fetchDashboardChartContracts(payload: {
 export async function validateMt5FileBridge(payload: {
   inbox_dir: string;
   archive_dir?: string;
+  outbox_dir?: string;
 }): Promise<{
   ok: boolean;
   inbox_dir: string;
   archive_dir: string;
+  outbox_dir: string;
   inbox_exists: boolean;
   archive_exists: boolean;
+  outbox_exists: boolean;
   inbox_writable: boolean;
   archive_writable: boolean;
+  outbox_writable: boolean;
   warnings: string[];
   instructions: string[];
 }> {
@@ -259,13 +313,82 @@ export async function fetchCalendarDayDetail(day: string, accountId = DEMO_ACCOU
   return response.data as CalendarDayDetail;
 }
 
+export async function fetchAIDiagnosis(accountId = DEMO_ACCOUNT_ID): Promise<AIDiagnosis> {
+  const overview = await fetchOverview(accountId);
+  const behavior = await fetchBehavior(accountId);
+  const closedTrades = overview.trades.filter((trade) => trade.is_closed);
+  const strategyMatrix = buildStrategyMatrix(overview.trades);
+
+  const metricPayload = {
+    returns: buildDailyReturns(overview.trades),
+    net_pnl: closedTrades.map((trade) => Number(trade.net_pnl || 0)),
+    gross_pnl: closedTrades.map((trade) => Number(trade.gross_pnl || 0)),
+    brokerage: closedTrades.map((trade) => Number(trade.commission || 0) + Number(trade.fees || 0)),
+    slippage: closedTrades.map((trade) => Number(trade.slippage_cost || 0)),
+    swaps: closedTrades.map((trade) => Number(trade.swaps || 0)),
+    strategies: Object.keys(strategyMatrix).length ? strategyMatrix : undefined,
+    capital: 100000,
+    total_capital: 100000,
+    target_volatility: 0.15,
+    max_drawdown_threshold: 0.25,
+    max_leverage: 3,
+    fractional_kelly: 0.5,
+    risk_per_trade: 0.01,
+    risk_budget: Object.keys(strategyMatrix).length
+      ? new Array(Object.keys(strategyMatrix).length).fill(1 / Object.keys(strategyMatrix).length)
+      : undefined,
+    ruin_floor: 0.2,
+  };
+
+  const metricRun = await runMetricComputation({ data: metricPayload, phase: 'research' });
+  const metricResults = metricRun.results || {};
+
+  const payload = {
+    governance_tier: 'TIER_2',
+    structured_metrics: {
+      journal: pickMetrics(metricResults, ['trade_count', 'win_rate', 'profit_factor', 'expectancy', 'average_win', 'average_loss', 'payoff_ratio']),
+      performance: pickMetrics(metricResults, ['sharpe', 'sortino', 'calmar', 'cagr', 'net_sharpe', 'net_sortino', 'net_cagr']),
+      risk: pickMetrics(metricResults, ['volatility', 'max_drawdown', 'value_at_risk', 'conditional_var', 'downside_deviation', 'ulcer_index']),
+      distributions: pickMetrics(metricResults, ['skewness', 'kurtosis', 'tail_ratio', 'autocorrelation']),
+      regimes: pickMetrics(metricResults, ['regime_sharpe', 'regime_drawdown', 'regime_switch_count', 'regime_transition_matrix']),
+      robustness: pickMetrics(metricResults, ['walk_forward', 'bootstrap_confidence_interval']),
+      portfolio: pickMetrics(metricResults, ['portfolio_variance', 'average_correlation', 'diversification_ratio', 'effective_bets']),
+      capital: pickMetrics(metricResults, ['kelly_fraction', 'safe_f', 'risk_of_ruin']),
+      risk_control: pickMetrics(metricResults, ['risk_contributions', 'value_at_risk', 'conditional_var']),
+      stress: pickMetrics(metricResults, ['stress_engine']),
+      survival: pickMetrics(metricResults, ['survival_engine', 'survival_score']),
+    },
+    percentiles: behavior.percentiles,
+    zscores: behavior.zscores,
+    behavioral_signals: behavior.signals,
+    time_intelligence: behavior.time_intelligence,
+    missed_opportunity_intelligence: behavior.missed_opportunity_intelligence,
+    metadata: {
+      account_id: accountId,
+      trade_count: overview.trades.length,
+      closed_trade_count: closedTrades.length,
+      missed_opportunity_count: overview.missedOpportunityCount,
+    },
+  };
+
+  const response = await withSessionRetry(() => apiClient.post('/ai-diagnostic/run', payload));
+  return (response.data?.diagnosis || {}) as AIDiagnosis;
+}
+
+export async function fetchAIInsightsSummary(accountId = DEMO_ACCOUNT_ID): Promise<AIInsightsResponse> {
+  const response = await withSessionRetry(() =>
+    apiClient.get('/ai-insights/summary', { params: { account_id: accountId } }),
+  );
+  return (response.data?.insights || {}) as AIInsightsResponse;
+}
+
 export async function fetchStrategies(): Promise<StrategyRecord[]> {
   const response = await withSessionRetry(() => apiClient.get('/strategy-setup/list'));
   return (response.data?.strategies || []) as StrategyRecord[];
 }
 
-export async function updateExecutionConfig(payload: Record<string, unknown>): Promise<void> {
-  await withSessionRetry(() => apiClient.post('/execution-tools/update-config', { config: payload }));
+export async function updateExecutionConfig(config: Record<string, unknown>, accountId?: string | null): Promise<void> {
+  await withSessionRetry(() => apiClient.post('/execution-tools/update-config', { config, account_id: accountId || undefined }));
 }
 
 export async function previewPositionPlan(payload: Record<string, unknown>): Promise<TradePreviewResult> {
@@ -273,9 +396,9 @@ export async function previewPositionPlan(payload: Record<string, unknown>): Pro
   return (response.data?.result || {}) as TradePreviewResult;
 }
 
-export async function recordFilledTrade(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const response = await withSessionRetry(() => apiClient.post('/execution-tools/record-filled-trade', payload));
-  return (response.data?.result || {}) as Record<string, unknown>;
+export async function prepareOrderTicket(payload: Record<string, unknown>): Promise<PreparedOrderTicketResult> {
+  const response = await withSessionRetry(() => apiClient.post('/execution-tools/prepare-order-ticket', payload));
+  return (response.data?.result || {}) as PreparedOrderTicketResult;
 }
 
 export async function closeTrade(payload: Record<string, unknown>): Promise<Record<string, unknown>> {

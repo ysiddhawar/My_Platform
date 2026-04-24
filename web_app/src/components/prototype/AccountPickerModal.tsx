@@ -10,14 +10,17 @@ type AccountPickerModalProps = {
   onClose?: () => void;
   onCreateAccount: (payload: CreateAccountInput) => Promise<AccountSummary>;
   onConnectMt5: (payload: Mt5FileBridgeInput) => Promise<void>;
-  onValidateMt5: (payload: { inbox_dir: string; archive_dir?: string }) => Promise<{
+  onValidateMt5: (payload: { inbox_dir: string; archive_dir?: string; outbox_dir?: string }) => Promise<{
     ok: boolean;
     inbox_dir: string;
     archive_dir: string;
+    outbox_dir: string;
     inbox_exists: boolean;
     archive_exists: boolean;
+    outbox_exists: boolean;
     inbox_writable: boolean;
     archive_writable: boolean;
+    outbox_writable: boolean;
     warnings: string[];
     instructions: string[];
   }>;
@@ -61,16 +64,20 @@ export function AccountPickerModal({
   const [mt5Config, setMt5Config] = useState({
     inbox_dir: '',
     archive_dir: '',
+    outbox_dir: '',
     poll_interval_seconds: '0.25',
   });
   const [mt5Validation, setMt5Validation] = useState<{
     ok: boolean;
     inbox_dir: string;
     archive_dir: string;
+    outbox_dir: string;
     inbox_exists: boolean;
     archive_exists: boolean;
+    outbox_exists: boolean;
     inbox_writable: boolean;
     archive_writable: boolean;
+    outbox_writable: boolean;
     warnings: string[];
     instructions: string[];
   } | null>(null);
@@ -133,6 +140,7 @@ export function AccountPickerModal({
                 {accounts.map((account) => {
                   const isActive = account.account_id === selectedAccountId;
                   const integration = integrationByAccount.get(account.account_id);
+                  const health = integration?.health;
                   return (
                     <button
                       key={account.account_id}
@@ -159,6 +167,34 @@ export function AccountPickerModal({
                       <div className={`mt-3 text-xs font-semibold uppercase tracking-[0.18em] ${isActive ? 'text-white/70' : 'text-black/50 dark:text-white/50'}`}>
                         {integration?.connected ? `${integration.adapter_type || 'adapter'} connected` : 'Not connected'}
                       </div>
+                      {health ? (
+                        <div className={`mt-3 rounded-[16px] border px-3 py-3 text-xs ${
+                          isActive
+                            ? 'border-white/10 bg-white/8 text-white/80'
+                            : 'border-black/10 bg-black/[0.03] text-black/65 dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70'
+                        }`}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`rounded-full px-2 py-1 font-semibold uppercase tracking-[0.16em] ${
+                              health.bridge_alive
+                                ? isActive
+                                  ? 'bg-emerald-400/15 text-emerald-100'
+                                  : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                                : isActive
+                                  ? 'bg-amber-400/15 text-amber-100'
+                                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                            }`}>
+                              {health.bridge_alive ? 'Bridge Alive' : health.status || 'Status Unknown'}
+                            </span>
+                            {health.last_event_type ? <span>Last event: {health.last_event_type}</span> : null}
+                          </div>
+                          <div className="mt-2 grid gap-1">
+                            <p>Inbox pending: {health.inbox_pending_count ?? 0} · Outbox pending: {health.outbox_pending_count ?? 0}</p>
+                            <p>Archive files: {health.archive_file_count ?? 0}</p>
+                            <p>Last MT5 event: {formatHealthTimestamp(health.last_event_at)}</p>
+                            <p>Last ticket handoff: {formatHealthTimestamp(health.last_command_at)}</p>
+                          </div>
+                        </div>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -230,16 +266,19 @@ export function AccountPickerModal({
                   <p className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-black/55 dark:text-white/55">MT5 Bridge Setup</p>
                   <h4 className="mt-2 text-base font-semibold text-black dark:text-white">How this works</h4>
                   <ol className="mt-3 space-y-2 text-sm leading-6 text-black/70 dark:text-white/70">
-                    <li>1. Point your MT5 exporter or EA to a local inbox directory.</li>
-                    <li>2. MyPlatform watches that inbox for JSON trade-event files.</li>
-                    <li>3. Processed files move into the archive directory so they are not replayed.</li>
-                    <li>4. Use Validate before saving to confirm the paths are usable on this machine.</li>
+                    <li>1. Use folders inside MetaTrader's shared Common Files area so the EA and MyPlatform can both access them.</li>
+                    <li>2. Point your MT5 bridge or EA event writer to a local inbox directory.</li>
+                    <li>3. Point your MT5 bridge or EA command reader to a local outbox directory.</li>
+                    <li>4. MyPlatform watches the inbox for JSON trade events and writes prepared order tickets into the outbox.</li>
+                    <li>5. Processed inbox files move into the archive directory so they are not replayed.</li>
+                    <li>6. Use Validate before saving to confirm the paths are usable on this machine.</li>
                   </ol>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input label="MT5 Inbox Directory" value={mt5Config.inbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, inbox_dir: value }))} />
                   <Input label="MT5 Archive Directory" value={mt5Config.archive_dir} onChange={(value) => setMt5Config((current) => ({ ...current, archive_dir: value }))} />
+                  <Input label="MT5 Outbox Directory" value={mt5Config.outbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, outbox_dir: value }))} />
                 </div>
                 <Input
                   label="Poll Interval Seconds"
@@ -256,6 +295,7 @@ export function AccountPickerModal({
                         const result = await onValidateMt5({
                           inbox_dir: mt5Config.inbox_dir,
                           archive_dir: mt5Config.archive_dir || undefined,
+                          outbox_dir: mt5Config.outbox_dir || undefined,
                         });
                         setMt5Validation(result);
                       } catch (validationError) {
@@ -275,8 +315,10 @@ export function AccountPickerModal({
                     <div className="mt-3 space-y-1 text-sm text-black/75 dark:text-white/75">
                       <p>Inbox: {mt5Validation.inbox_dir}</p>
                       <p>Archive: {mt5Validation.archive_dir}</p>
+                      <p>Outbox: {mt5Validation.outbox_dir}</p>
                       <p>Inbox ready: {mt5Validation.inbox_writable ? 'Yes' : 'No'}</p>
                       <p>Archive ready: {mt5Validation.archive_writable ? 'Yes' : 'No'}</p>
+                      <p>Outbox ready: {mt5Validation.outbox_writable ? 'Yes' : 'No'}</p>
                     </div>
                     {mt5Validation.warnings.length ? (
                       <div className="mt-3">
@@ -323,6 +365,7 @@ export function AccountPickerModal({
                         broker_id: payload.broker_id,
                         inbox_dir: mt5Config.inbox_dir,
                         archive_dir: mt5Config.archive_dir || undefined,
+                        outbox_dir: mt5Config.outbox_dir || undefined,
                         poll_interval_seconds: Number(mt5Config.poll_interval_seconds || 0.25),
                       });
                     }
@@ -345,6 +388,13 @@ export function AccountPickerModal({
       </div>
     </div>
   );
+}
+
+function formatHealthTimestamp(value?: string | null) {
+  if (!value) return 'No bridge activity yet';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString();
 }
 
 function Input({

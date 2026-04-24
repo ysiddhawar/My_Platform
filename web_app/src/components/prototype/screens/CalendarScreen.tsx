@@ -60,7 +60,7 @@ export function CalendarScreen() {
     if (selectedDate.getMonth() === visibleMonth && selectedDate.getFullYear() === visibleYear) {
       return;
     }
-    closeFloatingDetail();
+    delayedLeaveDay();
     setDetailAnchor(null);
     selectDay(`${visibleYear}-${String(visibleMonth + 1).padStart(2, '0')}-01`);
   }, [selectedDay, selectDay, visibleMonth, visibleYear]);
@@ -192,17 +192,16 @@ export function CalendarScreen() {
     requestAnimationFrame(() => setDetailVisible(true));
   };
 
-  const closeFloatingDetail = () => {
+  const delayedLeaveDay = () => {
     if (!detailOpen) return;
-    setDetailVisible(false);
-    cancelFloatingDetailClose();
-    // Only close if not hovering over detail
-    if (!isHoveringDetail) {
-      detailCloseTimer.current = window.setTimeout(() => {
+    // Start delayed close timer when leaving cell
+    detailCloseTimer.current = window.setTimeout(() => {
+      if (!isHoveringDetail) {
         setDetailOpen(false);
+        setDetailVisible(false);
         detailCloseTimer.current = null;
-      }, 220);
-    }
+      }
+    }, 200);
   };
 
   const startHoverBridge = () => {
@@ -221,6 +220,7 @@ export function CalendarScreen() {
     if (detailOpen) {
       detailCloseTimer.current = window.setTimeout(() => {
         setDetailOpen(false);
+        setDetailVisible(false);
         detailCloseTimer.current = null;
       }, 150);
     }
@@ -239,7 +239,7 @@ export function CalendarScreen() {
               summaries={summaries}
               selectedDay={selectedDay}
               onHoverDay={openFloatingDetail}
-              onLeaveDay={closeFloatingDetail}
+              onLeaveDay={delayedLeaveDay}
               visibleMonth={visibleMonth}
               visibleYear={visibleYear}
               statsByDay={dayStatsMap}
@@ -266,7 +266,7 @@ export function CalendarScreen() {
               loading={detailLoading}
               onPrevDay={() => shiftSelectedDay(-1)}
               onNextDay={() => shiftSelectedDay(1)}
-              onClose={closeFloatingDetail}
+              onClose={delayedLeaveDay}
               className="max-h-[80vh] w-full overflow-y-auto shadow-[0_28px_80px_rgba(0,0,0,0.32)]"
             />
             <div

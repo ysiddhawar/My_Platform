@@ -95,6 +95,18 @@ class BaseBrokerAdapter(ABC):
     def is_connected(self) -> bool:
         return self._connected
 
+    def supports_order_ticket_submission(self) -> bool:
+        return False
+
+    def submit_order_ticket(self, ticket: Dict[str, Any]) -> Dict[str, Any]:
+        raise BrokerAdapterError("Broker adapter does not support outbound order ticket submission")
+
+    def get_health_snapshot(self) -> Dict[str, Any]:
+        return {
+            "connected": self._connected,
+            "status": "connected" if self._connected else "disconnected",
+        }
+
     # ------------------------------------------------------
     # STREAM LOOP
     # ------------------------------------------------------

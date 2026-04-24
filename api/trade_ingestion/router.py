@@ -33,6 +33,7 @@ class RegisterMT5BridgeRequest(BaseModel):
     broker_id: str
     inbox_dir: str
     archive_dir: Optional[str] = None
+    outbox_dir: Optional[str] = None
     poll_interval_seconds: float = 0.25
 
 
@@ -69,6 +70,7 @@ def register_mt5_file_bridge(request: RegisterMT5BridgeRequest, user: dict = Dep
             broker_id=request.broker_id,
             inbox_dir=request.inbox_dir,
             archive_dir=request.archive_dir,
+            outbox_dir=request.outbox_dir,
             poll_interval_seconds=request.poll_interval_seconds,
         )
     except HTTPException:

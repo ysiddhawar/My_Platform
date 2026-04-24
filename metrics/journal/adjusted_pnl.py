@@ -52,6 +52,13 @@ def adjusted_pnl(context):
 
     total_cost = brokerage + slippage + swaps
     net = gross - total_cost
+    capital = float(context.data.get("capital") or context.data.get("total_capital") or 100000.0)
+    if capital <= 0:
+        capital = 100000.0
+
+    net_returns = np.divide(net, capital, dtype=np.float64)
+    net_returns = net_returns[np.isfinite(net_returns)]
+    net_returns = np.clip(net_returns, -0.999, 10.0)
 
     cumulative_net = np.cumsum(net)
 
@@ -66,7 +73,8 @@ def adjusted_pnl(context):
     # -----------------------------------------
     # Write downstream research returns
     # -----------------------------------------
-    context.set_cache("net_returns", net)
+    context.set_cache("net_returns", net_returns)
+    context.set_cache("net_pnl_series", net)
 
     return {
         "total_gross_pnl": float(total_gross),

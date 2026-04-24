@@ -255,6 +255,8 @@ class Trade:
     # =====================================================
 
     def _compute_planned_metrics(self):
+        self._risk_amount = None
+        self._rrr_at_entry = None
         if self._stop_loss_at_entry is not None:
             risk_per_unit = abs(self._entry_price - self._stop_loss_at_entry)
             self._risk_amount = risk_per_unit * self._quantity
@@ -387,6 +389,177 @@ class Trade:
         if not notes:
             return
         self._notes = notes if not self._notes else f"{self._notes}\n{notes}"
+
+    def record_lifecycle_event(
+        self,
+        event_type: str,
+        payload: Optional[Dict[str, Any]] = None,
+        line_snapshot: Optional[Dict[str, Any]] = None,
+        notes: Optional[str] = None,
+        metadata_update: Optional[Dict[str, Any]] = None,
+    ):
+        if line_snapshot:
+            self.add_line_snapshot(line_snapshot)
+        if notes:
+            self.append_notes(notes)
+        if metadata_update:
+            self._metadata.update(dict(metadata_update))
+        timestamp = datetime.now(timezone.utc).isoformat()
+        lifecycle_events = list(self._metadata.get("lifecycle_events") or [])
+        lifecycle_events.append(
+            {
+                "type": event_type,
+                "timestamp": timestamp,
+                "payload": dict(payload or {}),
+            }
+        )
+        self._metadata["lifecycle_events"] = lifecycle_events
+        self._metadata["last_broker_sync_at"] = timestamp
+        self._metadata["last_broker_event_type"] = event_type
+
+    def update_position_plan(
+        self,
+        stop_loss_at_entry: Optional[float] = None,
+        target_at_entry: Optional[float] = None,
+        minimum_target_price: Optional[float] = None,
+        minimum_target_reward: Optional[float] = None,
+        line_snapshot: Optional[Dict[str, Any]] = None,
+        notes: Optional[str] = None,
+        metadata_update: Optional[Dict[str, Any]] = None,
+        event_type: str = "POSITION_MODIFIED",
+    ):
+        if self._is_closed:
+            raise TradeValidationError("Cannot modify a closed trade")
+        if stop_loss_at_entry is not None:
+            self._stop_loss_at_entry = float(stop_loss_at_entry)
+        if target_at_entry is not None:
+            self._target_at_entry = float(target_at_entry)
+        if minimum_target_price is not None:
+            self._minimum_target_price = float(minimum_target_price)
+        if minimum_target_reward is not None:
+            self._minimum_target_reward = float(minimum_target_reward)
+        self._compute_planned_metrics()
+        self.record_lifecycle_event(
+            event_type=event_type,
+            payload={
+                "stop_loss_at_entry": self._stop_loss_at_entry,
+                "target_at_entry": self._target_at_entry,
+                "minimum_target_price": self._minimum_target_price,
+            },
+            line_snapshot=line_snapshot,
+            notes=notes,
+            metadata_update=metadata_update,
+        )
+
+    def scale_in(
+        self,
+        additional_quantity: float,
+        fill_price: float,
+        fees: float = 0.0,
+        commission: float = 0.0,
+        swaps: float = 0.0,
+        slippage_at_entry: float = 0.0,
+        line_snapshot: Optional[Dict[str, Any]] = None,
+        notes: Optional[str] = None,
+        metadata_update: Optional[Dict[str, Any]] = None,
+    ):
+        if self._is_closed:
+            raise TradeValidationError("Cannot scale into a closed trade")
+        additional_quantity = self._validate_positive(additional_quantity, "additional_quantity")
+        fill_price = self._validate_positive(fill_price, "fill_price")
+        total_quantity = self._quantity + additional_quantity
+        self._entry_price = ((self._entry_price * self._quantity) + (fill_price * additional_quantity)) / total_quantity
+        self._quantity = total_quantity
+        self._fees += float(fees)
+        self._commission += float(commission)
+        self._swaps += float(swaps)
+        self._slippage_at_entry += float(slippage_at_entry)
+        self._compute_planned_metrics()
+        self.record_lifecycle_event(
+            event_type="SCALE_IN",
+            payload={
+                "additional_quantity": additional_quantity,
+                "fill_price": fill_price,
+                "new_quantity": self._quantity,
+                "new_entry_price": self._entry_price,
+            },
+            line_snapshot=line_snapshot,
+            notes=notes,
+            metadata_update=metadata_update,
+        )
+
+    def create_partial_close_trade(
+        self,
+        closed_quantity: float,
+        exit_price: float,
+        exit_time: Optional[datetime] = None,
+        exit_reason: str = "",
+        slippage_at_exit: float = 0.0,
+        checklist_after: Optional[List[str]] = None,
+        probability_bucket: Optional[str] = None,
+        post_trade_capture: Optional[Dict[str, Any]] = None,
+        close_classification: Optional[str] = None,
+        notes: Optional[str] = None,
+        line_snapshot: Optional[Dict[str, Any]] = None,
+        metadata_update: Optional[Dict[str, Any]] = None,
+        partial_trade_id: Optional[str] = None,
+    ) -> "Trade":
+        if self._is_closed:
+            raise TradeValidationError("Cannot partially close a closed trade")
+        closed_quantity = self._validate_positive(closed_quantity, "closed_quantity")
+        if closed_quantity >= self._quantity:
+            raise TradeValidationError("closed_quantity must be smaller than current quantity for partial close")
+
+        existing_quantity = self._quantity
+        proportion = closed_quantity / existing_quantity
+        child_payload = self.to_dict()
+        child_payload.update(
+            {
+                "trade_id": partial_trade_id or str(uuid.uuid4()),
+                "quantity": closed_quantity,
+                "fees": self._fees * proportion,
+                "commission": self._commission * proportion,
+                "swaps": self._swaps * proportion,
+                "slippage_at_entry": self._slippage_at_entry * proportion,
+                "metadata": {
+                    **dict(self._metadata or {}),
+                    "parent_trade_id": self._trade_id,
+                    "is_partial_close_slice": True,
+                },
+            }
+        )
+        child_trade = Trade.from_dict(child_payload)
+        child_trade.close_trade(
+            exit_price=exit_price,
+            exit_time=exit_time,
+            exit_reason=exit_reason,
+            slippage_at_exit=slippage_at_exit,
+            checklist_after=checklist_after,
+            probability_bucket=probability_bucket,
+            post_trade_capture=post_trade_capture,
+            close_classification=close_classification,
+            notes=notes,
+        )
+
+        self._quantity = existing_quantity - closed_quantity
+        self._fees -= self._fees * proportion
+        self._commission -= self._commission * proportion
+        self._swaps -= self._swaps * proportion
+        self._slippage_at_entry -= self._slippage_at_entry * proportion
+        self._compute_planned_metrics()
+        self.record_lifecycle_event(
+            event_type="PARTIAL_CLOSE",
+            payload={
+                "closed_quantity": closed_quantity,
+                "remaining_quantity": self._quantity,
+                "partial_trade_id": child_trade.trade_id,
+                "exit_price": exit_price,
+            },
+            line_snapshot=line_snapshot,
+            notes=notes,
+            metadata_update=metadata_update,
+        )
+        return child_trade
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "Trade":

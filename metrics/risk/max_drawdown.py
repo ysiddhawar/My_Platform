@@ -19,16 +19,27 @@ def max_drawdown(context):
             context.data.get("returns", []),
             dtype=np.float64
         )
-        returns = returns[~np.isnan(returns)]
+        returns = returns[np.isfinite(returns)]
+
+    returns = returns[np.isfinite(returns)]
+    returns = returns[returns > -1.0]
+    returns = np.clip(returns, -0.999, 10.0)
 
     if returns is None or returns.size < 2:
         return None
 
     equity = np.cumprod(1 + returns)
+    equity = equity[np.isfinite(equity)]
+    if equity.size < 2:
+        return None
 
     peaks = np.maximum.accumulate(equity)
+    peaks = np.where(peaks <= 0, np.nan, peaks)
 
     drawdowns = (equity - peaks) / peaks
+    drawdowns = drawdowns[np.isfinite(drawdowns)]
+    if drawdowns.size == 0:
+        return None
 
     return float(np.min(drawdowns))
 

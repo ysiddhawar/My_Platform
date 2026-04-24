@@ -23,6 +23,7 @@ from execution_tools.missed_opportunity_capture_service import MissedOpportunity
 
 from ai.diagnostic_orchestrator import DiagnosticOrchestrator
 from ai.behavioral_analyzer import BehavioralAnalyzer
+from ai.insights_orchestrator import AIInsightsOrchestrator
 from decisions.decision_engine import DecisionEngine
 
 from monitoring.monitoring_registry import MonitoringRegistry
@@ -205,6 +206,15 @@ class APIRegistry:
 
         self.diagnostic_orchestrator = DiagnosticOrchestrator()
         self.behavioral_analyzer = BehavioralAnalyzer()
+        self.ai_insights_orchestrator = AIInsightsOrchestrator(
+            trade_repository=self.trade_repository,
+            missed_opportunity_repository=self.missed_opportunity_repository,
+            trading_platform_session_repository=self.trading_platform_session_repository,
+            behavioral_analyzer=self.behavioral_analyzer,
+            calendar_aggregation_engine=self.calendar_aggregation_engine,
+            execution_engine=self.execution_engine,
+            registry=self.registry,
+        )
         self.decision_engine = DecisionEngine()
         self.risk_modeling_engine = RiskModelingEngine()
 

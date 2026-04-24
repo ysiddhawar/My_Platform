@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { DashboardFilterPreset, DashboardFilterState, PrototypeView, WorkspaceLayout } from '@/types/prototype';
+import type { DashboardFilterPreset, DashboardFilterState, DashboardInsightFocus, InsightDrilldownTarget, InsightWorkspacePanelPayload, PrototypeView, WorkspaceLayout } from '@/types/prototype';
 
 const SIDEBAR_STORAGE_KEY = 'my_platform_sidebar_order';
 const SIDEBAR_COLLAPSED_KEY = 'my_platform_sidebar_collapsed';
@@ -112,6 +112,11 @@ type PrototypeState = {
   selectedDay: string | null;
   calendarVisibleMonth: number | null;
   calendarVisibleYear: number | null;
+  journalSearchText: string;
+  missedOpportunitySearchText: string;
+  dashboardInsightFocus: DashboardInsightFocus | null;
+  insightWorkspacePanel: InsightWorkspacePanelPayload | null;
+  insightWorkspaceAutoCollapsedSidebar: boolean;
   accountId: string | null;
   sidebarOrder: PrototypeView[];
   sidebarCollapsed: boolean;
@@ -125,7 +130,12 @@ type PrototypeState = {
   selectTrade: (tradeId: string) => void;
   selectDay: (day: string) => void;
   setCalendarVisibleMonthYear: (month: number | null, year: number | null) => void;
+  setJournalSearchText: (value: string) => void;
+  setMissedOpportunitySearchText: (value: string) => void;
   setAccountId: (accountId: string | null) => void;
+  openInsightDrilldown: (payload: InsightWorkspacePanelPayload) => void;
+  closeInsightDrilldown: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
   setSidebarOrder: (order: PrototypeView[]) => void;
   toggleSidebarCollapsed: () => void;
   resetSidebarOrder: () => void;
@@ -149,6 +159,11 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
   selectedDay: null,
   calendarVisibleMonth: null,
   calendarVisibleYear: null,
+  journalSearchText: '',
+  missedOpportunitySearchText: '',
+  dashboardInsightFocus: null,
+  insightWorkspacePanel: null,
+  insightWorkspaceAutoCollapsedSidebar: false,
   accountId: null,
   sidebarOrder: defaultSidebarOrder,
   sidebarCollapsed: false,
@@ -162,7 +177,33 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
   selectTrade: (selectedTradeId) => set({ selectedTradeId, activeView: 'trade-detail' }),
   selectDay: (selectedDay) => set({ selectedDay, activeView: 'calendar' }),
   setCalendarVisibleMonthYear: (calendarVisibleMonth, calendarVisibleYear) => set({ calendarVisibleMonth, calendarVisibleYear }),
+  setJournalSearchText: (journalSearchText) => set({ journalSearchText }),
+  setMissedOpportunitySearchText: (missedOpportunitySearchText) => set({ missedOpportunitySearchText }),
   setAccountId: (accountId) => set({ accountId }),
+  openInsightDrilldown: (payload) =>
+    set((state) => ({
+      activeView: 'ai-insights',
+      dashboardInsightFocus: null,
+      insightWorkspacePanel: payload,
+      insightWorkspaceAutoCollapsedSidebar:
+        state.insightWorkspacePanel == null ? !state.sidebarCollapsed : state.insightWorkspaceAutoCollapsedSidebar,
+      sidebarCollapsed: true,
+    })),
+  closeInsightDrilldown: () =>
+    set((state) => {
+      const nextSidebarCollapsed = state.insightWorkspaceAutoCollapsedSidebar ? false : state.sidebarCollapsed;
+      persistJson(SIDEBAR_COLLAPSED_KEY, nextSidebarCollapsed);
+      return {
+        insightWorkspacePanel: null,
+        dashboardInsightFocus: null,
+        insightWorkspaceAutoCollapsedSidebar: false,
+        sidebarCollapsed: nextSidebarCollapsed,
+      };
+    }),
+  setSidebarCollapsed: (sidebarCollapsed) => {
+    persistJson(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed);
+    set({ sidebarCollapsed });
+  },
   setSidebarOrder: (sidebarOrder) => {
     persistJson(SIDEBAR_STORAGE_KEY, sidebarOrder);
     set({ sidebarOrder });
@@ -306,6 +347,8 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
       sidebarCollapsed,
       calendarVisibleMonth: null,
       calendarVisibleYear: null,
+      journalSearchText: '',
+      missedOpportunitySearchText: '',
       dashboardGroupOrder,
       dashboardMetricGroup,
       dashboardMetricSize,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from 'react-query';
 
 import { fetchTrades, searchTrades } from '@/api/prototype';
@@ -9,7 +9,8 @@ export function JournalScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
   const selectedTradeId = usePrototypeStore((state) => state.selectedTradeId);
   const selectTrade = usePrototypeStore((state) => state.selectTrade);
-  const [searchText, setSearchText] = useState('');
+  const searchText = usePrototypeStore((state) => state.journalSearchText);
+  const setSearchText = usePrototypeStore((state) => state.setJournalSearchText);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery(['prototype-trades', accountId], () => fetchTrades(accountId as string), {
     enabled: Boolean(accountId),

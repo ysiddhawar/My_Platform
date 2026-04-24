@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 from threading import RLock
 from datetime import datetime, timezone
+import uuid
 
 from core.context import Context
 from core.execution_engine import ExecutionEngine
@@ -149,6 +150,88 @@ class ExecutionOrchestrator:
                     position_plan,
                     discipline_state,
                 ),
+            }
+
+    def prepare_order_ticket(
+        self,
+        trade_request: Dict[str, Any],
+    ) -> Dict[str, Any]:
+
+        with self._lock:
+
+            self._validate_trade_request(trade_request)
+            trade_request = self._enrich_trade_request(trade_request)
+
+            discipline_state = self._build_discipline_state(trade_request)
+            discipline_allowed = self._is_discipline_allowed(trade_request, discipline_state)
+
+            if not discipline_allowed:
+                return self._reject(
+                    "DISCIPLINE_BLOCK",
+                    metadata={
+                        "alerts": discipline_state.get("alerts", []),
+                        "missing_fields": discipline_state.get("missing_fields", []),
+                    },
+                )
+
+            open_positions = trade_request.get("open_positions", 0)
+            correlation_exposure = trade_request.get("correlation_exposure")
+
+            if not self.risk_line_manager.is_trade_allowed(
+                open_positions=open_positions,
+                correlation_exposure=correlation_exposure,
+            ):
+                return self._reject("RISK_LIMIT_BLOCK")
+
+            if not self.slippage_guard.is_execution_allowed(
+                slippage_cost=trade_request.get("slippage_cost"),
+                spread=trade_request.get("spread"),
+                volatility=trade_request.get("volatility"),
+            ):
+                return self._reject("EXECUTION_GUARD_BLOCK")
+
+            position_plan = self.position_sizer.preview_position_plan(
+                account_balance=trade_request["account_balance"],
+                symbol=trade_request["symbol"],
+                market_type=trade_request["market_type"],
+                side=trade_request["side"],
+                entry_price=trade_request["entry_price"],
+                stop_loss_price=trade_request["stop_loss_price"],
+                target_price=trade_request.get("target_price"),
+                probability_bucket=trade_request.get("probability_bucket"),
+                explicit_costs=trade_request.get("cost_overrides"),
+                instrument_overrides=trade_request.get("instrument_overrides"),
+            )
+
+            event = ExecutionEvent(
+                event_type="BROKER_ORDER_TICKET_PREPARED",
+                timestamp=datetime.now(timezone.utc),
+                metadata={
+                    "symbol": trade_request.get("symbol"),
+                    "side": trade_request.get("side"),
+                    "calculated_position_size": position_plan["quantity"],
+                    "mode": "broker_prefill_only",
+                },
+            )
+
+            self._emit_event(event)
+
+            return {
+                "status": "ready",
+                "position_size": position_plan["quantity"],
+                "position_plan": position_plan,
+                "discipline_state": discipline_state,
+                "broker_order_ticket": self._build_broker_order_ticket(
+                    trade_request,
+                    position_plan,
+                    discipline_state,
+                ),
+                "launch": {
+                    "provider": trade_request.get("broker_id", "BROKER"),
+                    "status": "pending_broker_integration",
+                    "supported": False,
+                    "message": "Broker ticket launching is enabled for prefill only. Final trade execution must happen inside the broker platform.",
+                },
             }
 
     # ======================================================
@@ -354,6 +437,71 @@ class ExecutionOrchestrator:
             "drawdown_at_entry": trade_request.get("drawdown_snapshot"),
             "open_positions_count": trade_request.get("open_positions"),
             "correlation_exposure_snapshot": trade_request.get("correlation_snapshot") or {},
+        }
+
+    def _build_broker_order_ticket(
+        self,
+        trade_request: Dict[str, Any],
+        position_plan: Dict[str, Any],
+        discipline_state: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        strategy_name = trade_request.get("strategy_setup") or trade_request.get("setup_name") or "UNSPECIFIED"
+        client_ticket_id = str(uuid.uuid4())
+        prepared_at = datetime.now(timezone.utc).isoformat()
+        return {
+            "client_ticket_id": client_ticket_id,
+            "prepared_ticket_id": client_ticket_id,
+            "prepared_at": prepared_at,
+            "command_type": "OPEN_ORDER_TICKET",
+            "bridge_contract_version": "2026-04-17",
+            "route_mode": "prefill_only",
+            "account_id": trade_request["account_id"],
+            "broker_id": trade_request["broker_id"],
+            "symbol": trade_request["symbol"],
+            "market_type": trade_request["market_type"],
+            "side": trade_request["side"],
+            "order_type": trade_request.get("order_type", "market"),
+            "entry_price": trade_request["entry_price"],
+            "planned_entry_price": trade_request["entry_price"],
+            "stop_loss_price": trade_request["stop_loss_price"],
+            "stop_loss_at_entry": trade_request["stop_loss_price"],
+            "target_price": trade_request.get("target_price"),
+            "target_at_entry": trade_request.get("target_price"),
+            "quantity": position_plan["quantity"],
+            "lot_size": float(trade_request.get("lot_size", 1.0)),
+            "leverage_used": float(trade_request.get("leverage_used", 1.0)),
+            "strategy_tag": strategy_name,
+            "strategy_setup": strategy_name,
+            "setup_name": strategy_name,
+            "probability_bucket": trade_request.get("probability_bucket"),
+            "selected_checklist": list(trade_request.get("selected_checklist", [])),
+            "checklist_before": list(trade_request.get("selected_checklist", [])),
+            "notes": trade_request.get("notes"),
+            "pre_trade_capture": {
+                "phase": "pre_trade",
+                "strategy_name": strategy_name,
+                "probability_bucket": trade_request.get("probability_bucket"),
+                "selected_checklist": list(trade_request.get("selected_checklist", [])),
+                "mandatory_checklist": discipline_state.get("mandatory_checklist", []),
+                "all_criteria_selected": discipline_state.get("all_mandatory_selected", False),
+                "notes": trade_request.get("notes"),
+                "metadata": {
+                    "discipline_mode_enabled": discipline_state.get("enabled", False),
+                    "alerts": discipline_state.get("alerts", []),
+                },
+            },
+            "line_history": list(trade_request.get("line_history", [])),
+            "minimum_target_price": position_plan.get("minimum_target_price"),
+            "minimum_target_reward": position_plan.get("minimum_target_reward"),
+            "metadata": {
+                "prepared_ticket_id": client_ticket_id,
+                "planned_by": "position_sizer",
+                "position_plan": position_plan,
+                "discipline_state": discipline_state,
+                "broker_id": trade_request["broker_id"],
+            },
+            "position_plan": position_plan,
+            "discipline_state": discipline_state,
         }
 
     def _emit_event(self, event: ExecutionEvent):

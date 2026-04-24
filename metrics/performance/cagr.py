@@ -13,7 +13,9 @@ def _get_research_returns(context):
         dtype=np.float64
     )
 
-    returns = returns[~np.isnan(returns)]
+    returns = returns[np.isfinite(returns)]
+    returns = returns[returns > -1.0]
+    returns = np.clip(returns, -0.999, 10.0)
 
     context.set_cache("clean_returns", returns)
     return returns
@@ -34,8 +36,16 @@ def cagr(context):
     else:
         periods = 252
 
+    if returns.size == 0:
+        return None
+
     log_returns = np.log1p(returns)
+    log_returns = log_returns[np.isfinite(log_returns)]
+    if log_returns.size == 0:
+        return None
     total_log = np.sum(log_returns)
+    if not np.isfinite(total_log):
+        return None
 
     years = n / periods
     if years <= 0:

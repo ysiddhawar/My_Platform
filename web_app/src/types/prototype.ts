@@ -25,6 +25,23 @@ export type AccountIntegration = {
   connected?: boolean;
   inbox_dir?: string | null;
   archive_dir?: string | null;
+  outbox_dir?: string | null;
+  health?: {
+    connected?: boolean;
+    status?: string | null;
+    bridge_alive?: boolean;
+    inbox_pending_count?: number;
+    outbox_pending_count?: number;
+    archive_file_count?: number;
+    last_event_at?: string | null;
+    last_event_type?: string | null;
+    last_event_file?: string | null;
+    last_command_at?: string | null;
+    last_command_file?: string | null;
+    latest_inbox_mtime?: string | null;
+    latest_outbox_mtime?: string | null;
+    latest_archive_mtime?: string | null;
+  } | null;
 };
 
 export type CreateAccountInput = {
@@ -44,6 +61,7 @@ export type Mt5FileBridgeInput = {
   broker_id?: string;
   inbox_dir: string;
   archive_dir?: string;
+  outbox_dir?: string;
   poll_interval_seconds?: number;
 };
 
@@ -58,6 +76,33 @@ export type WorkspaceLayout = {
   dashboardTopWidgetVisibility: Record<string, boolean>;
   dashboardFilters?: DashboardFilterState;
   dashboardFilterPresets?: DashboardFilterPreset[];
+};
+
+export type InsightDrilldownTarget = {
+  view: PrototypeView;
+  dashboardFiltersPatch?: Partial<DashboardFilterState>;
+  dashboardFocusGroup?: string | null;
+  dashboardFocusChart?: string | null;
+  journalSearchText?: string;
+  missedOpportunitySearchText?: string;
+  selectedTradeId?: string | null;
+  selectedDay?: string;
+  calendarVisibleMonth?: number | null;
+  calendarVisibleYear?: number | null;
+};
+
+export type DashboardInsightFocus = {
+  groupTitle?: string | null;
+  chartTitle?: string | null;
+  token: number;
+};
+
+export type InsightWorkspacePanelPayload = {
+  target: InsightDrilldownTarget;
+  title: string;
+  summary?: string | null;
+  actionLabel?: string | null;
+  evidence?: AIInsightEvidence[];
 };
 
 export type DashboardFilterState = {
@@ -215,6 +260,129 @@ export type BehaviorAnalysis = {
   };
 };
 
+export type AIDiagnosis = {
+  diagnosis_id?: string;
+  created_at?: number;
+  risk_tier?: string | null;
+  health_score?: number | null;
+  findings: BehaviorFinding[];
+  strengths: BehaviorFinding[];
+  metadata?: Record<string, unknown>;
+};
+
+export type AIInsightEvidence = {
+  label: string;
+  value: string;
+  comparison?: string | null;
+};
+
+export type AIInsightFinding = {
+  id: string;
+  title: string;
+  explanation: string;
+  categories: string[];
+  dimensions: string[];
+  behavior_tags: string[];
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  confidence: 'low' | 'medium' | 'high';
+  sample_size: number;
+  impact_score: number;
+  priority_score: number;
+  evidence: AIInsightEvidence[];
+  impact_description?: string | null;
+  drilldown?: {
+    view: PrototypeView;
+    dashboard_filters_patch?: Partial<DashboardFilterState>;
+    dashboard_focus_group?: string | null;
+    dashboard_focus_chart?: string | null;
+    journal_search_text?: string | null;
+    missed_opportunity_search_text?: string | null;
+    selected_trade_id?: string | null;
+    selected_day?: string | null;
+    calendar_visible_month?: number | null;
+    calendar_visible_year?: number | null;
+  } | null;
+};
+
+export type AIRecommendation = {
+  id: string;
+  title: string;
+  action: string;
+  why: string;
+  implementation: string[];
+  priority: 'now' | 'soon' | 'later';
+  source_insight_ids: string[];
+  expected_benefit?: string | null;
+  drilldown?: {
+    view: PrototypeView;
+    dashboard_filters_patch?: Partial<DashboardFilterState>;
+    dashboard_focus_group?: string | null;
+    dashboard_focus_chart?: string | null;
+    journal_search_text?: string | null;
+    missed_opportunity_search_text?: string | null;
+    selected_trade_id?: string | null;
+    selected_day?: string | null;
+    calendar_visible_month?: number | null;
+    calendar_visible_year?: number | null;
+  } | null;
+};
+
+export type AISectionReview = {
+  what_is_going_wrong: AIInsightFinding[];
+  why_it_is_going_wrong: AIInsightFinding[];
+  what_is_going_right: AIInsightFinding[];
+  what_to_do_next: AIRecommendation[];
+};
+
+export type AIDashboardMetricReview = {
+  metric_key: string;
+  label: string;
+  meaning: string;
+  current_value_summary: string;
+  what_it_shows: string;
+  healthy_range?: string | null;
+  satisfactory_range?: string | null;
+  weak_range?: string | null;
+  status: 'good' | 'satisfactory' | 'bad' | 'unknown';
+};
+
+export type AIDashboardChartReview = {
+  chart_key: string;
+  label: string;
+  meaning: string;
+  what_it_shows: string;
+  important_takeaway: string;
+};
+
+export type AIDashboardDetailedReview = AISectionReview & {
+  metric_reviews: AIDashboardMetricReview[];
+  chart_reviews: AIDashboardChartReview[];
+};
+
+export type AIInsightsMetadata = {
+  account_id: string;
+  generated_at: string;
+  trade_count: number;
+  closed_trade_count: number;
+  missed_opportunity_count: number;
+  visible_period: { start?: string | null; end?: string | null };
+  analysis_stage: string;
+  data_coverage?: Record<string, unknown>;
+};
+
+export type AIInsightsResponse = {
+  headline_summary: string[];
+  summary: AISectionReview;
+  detailed_review: {
+    dashboard: AIDashboardDetailedReview;
+    journal: AISectionReview;
+    missed_opportunities: AISectionReview;
+    calendar: AISectionReview;
+  };
+  metadata: AIInsightsMetadata;
+  created_at_epoch?: number;
+};
+
 export type TradeAttachment = {
   attachment_id: string;
   trade_id: string;
@@ -367,6 +535,20 @@ export type TradePreviewResult = {
     probability_bucket?: string | null;
     all_mandatory_selected?: boolean;
   };
+};
+
+export type PreparedOrderTicketResult = TradePreviewResult & {
+  status?: string;
+  position_size?: number;
+  broker_order_ticket?: Record<string, unknown>;
+  launch?: {
+    provider?: string;
+    status?: string;
+    supported?: boolean;
+    message?: string;
+  };
+  reason?: string;
+  detail?: string;
 };
 
 export type DemoActionResult = {

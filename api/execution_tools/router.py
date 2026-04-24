@@ -42,6 +42,7 @@ class ExecuteTradeResponse(BaseModel):
 
 class UpdateExecutionConfigRequest(BaseModel):
     config: Dict[str, Any]
+    account_id: Optional[str] = None
 
 
 class UpdateExecutionConfigResponse(BaseModel):
@@ -66,11 +67,34 @@ class CloseTradeRequest(BaseModel):
     line_snapshot: Optional[Dict[str, Any]] = None
 
 
+def _resolve_orchestrator(account_id: str):
+    try:
+        return api_registry.account_registry.get_container(account_id).orchestrator
+    except Exception:
+        return api_registry.execution_orchestrator
+
+
+def _cache_prepared_ticket(account_id: str, ticket: Dict[str, Any]) -> None:
+    try:
+        context = api_registry.account_registry.get_context(account_id)
+    except Exception:
+        return
+    prepared = dict(context.get_cache("prepared_broker_tickets") or {})
+    client_ticket_id = ticket.get("client_ticket_id") or ticket.get("prepared_ticket_id")
+    if client_ticket_id:
+        prepared[str(client_ticket_id)] = ticket
+        context.set_cache("prepared_broker_tickets", prepared)
+
+
 @router.post("/execute-trade", response_model=ExecuteTradeResponse)
 def execute_trade(request: ExecuteTradeRequest, user: dict = Depends(get_current_user)):
     try:
         ensure_account_access(user, request.account_id)
-        result = api_registry.execution_orchestrator.execute_trade(request.model_dump())
+        result = {
+            "status": "disabled",
+            "reason": "DIRECT_EXECUTION_DISABLED",
+            "detail": "Direct trade routing from the app has been disabled. Use /prepare-order-ticket and complete execution in the broker platform.",
+        }
         return ExecuteTradeResponse(result=result)
     except HTTPException:
         raise
@@ -81,7 +105,8 @@ def execute_trade(request: ExecuteTradeRequest, user: dict = Depends(get_current
 @router.post("/update-config", response_model=UpdateExecutionConfigResponse)
 def update_execution_config(request: UpdateExecutionConfigRequest):
     try:
-        api_registry.execution_orchestrator.update_config(request.config)
+        orchestrator = _resolve_orchestrator(request.account_id) if request.account_id else api_registry.execution_orchestrator
+        orchestrator.update_config(request.config)
         return UpdateExecutionConfigResponse(status="updated")
     except HTTPException:
         raise
@@ -93,8 +118,34 @@ def update_execution_config(request: UpdateExecutionConfigRequest):
 def preview_trade(request: ExecuteTradeRequest, user: dict = Depends(get_current_user)):
     try:
         ensure_account_access(user, request.account_id)
-        result = api_registry.execution_orchestrator.preview_trade(request.model_dump())
+        result = _resolve_orchestrator(request.account_id).preview_trade(request.model_dump())
         return TradePreviewResponse(result=result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/prepare-order-ticket", response_model=ExecuteTradeResponse)
+def prepare_order_ticket(request: ExecuteTradeRequest, user: dict = Depends(get_current_user)):
+    try:
+        ensure_account_access(user, request.account_id)
+        result = _resolve_orchestrator(request.account_id).prepare_order_ticket(request.model_dump())
+        if result.get("status") == "ready" and isinstance(result.get("broker_order_ticket"), dict):
+            _cache_prepared_ticket(request.account_id, result["broker_order_ticket"])
+            try:
+                result["launch"] = api_registry.broker_integration_service.submit_prepared_ticket(
+                    request.account_id,
+                    result["broker_order_ticket"],
+                )
+            except Exception as exc:
+                result["launch"] = {
+                    "provider": request.broker_id or "BROKER",
+                    "status": "pending_broker_integration",
+                    "supported": False,
+                    "message": str(exc),
+                }
+        return ExecuteTradeResponse(result=result)
     except HTTPException:
         raise
     except Exception as exc:
@@ -105,18 +156,12 @@ def preview_trade(request: ExecuteTradeRequest, user: dict = Depends(get_current
 def record_filled_trade(request: ExecuteTradeRequest, user: dict = Depends(get_current_user)):
     try:
         ensure_account_access(user, request.account_id)
-        execution_result = api_registry.execution_orchestrator.execute_trade(request.model_dump())
-        if execution_result.get("status") != "approved":
-            return ExecuteTradeResponse(result=execution_result)
-        payload = execution_result["execution_payload"]
-        result = api_registry.trade_listener.on_broker_event(
-            {
-                "event_id": f"filled-{payload['account_id']}-{payload['symbol']}-{payload['entry_price']}",
-                "type": "TRADE_FILLED",
-                "payload": payload,
-            }
-        )
-        return ExecuteTradeResponse(result={**execution_result, "recording": result})
+        result = {
+            "status": "disabled",
+            "reason": "DIRECT_EXECUTION_DISABLED",
+            "detail": "Filled trades must come from the broker integration event stream, not from the Position Sizer flow.",
+        }
+        return ExecuteTradeResponse(result=result)
     except HTTPException:
         raise
     except Exception as exc:

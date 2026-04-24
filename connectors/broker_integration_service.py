@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from pathlib import Path
 
 from connectors.account_registry import AccountRegistry
 from connectors.broker_adapter import BrokerAdapterRegistry
@@ -26,6 +27,7 @@ class BrokerIntegrationService:
         broker_id: str,
         inbox_dir: str,
         archive_dir: Optional[str] = None,
+        outbox_dir: Optional[str] = None,
         poll_interval_seconds: float = 0.25,
     ) -> Dict[str, Any]:
         account = self._account_repository.get(account_id)
@@ -36,6 +38,7 @@ class BrokerIntegrationService:
             broker_id=broker_id,
             inbox_dir=inbox_dir,
             archive_dir=archive_dir,
+            outbox_dir=outbox_dir,
             poll_interval_seconds=poll_interval_seconds,
         )
         self._broker_adapter_registry.register(broker_id, adapter)
@@ -46,6 +49,7 @@ class BrokerIntegrationService:
             "adapter_type": "mt5_file_bridge",
             "inbox_dir": inbox_dir,
             "archive_dir": archive_dir or f"{inbox_dir}/processed",
+            "outbox_dir": outbox_dir or f"{Path(inbox_dir).expanduser().parent / 'outbox'}",
             "connected": adapter.is_connected(),
         }
 
@@ -78,6 +82,10 @@ class BrokerIntegrationService:
                     "broker_id": container.account.broker_id,
                     "adapter_type": container.adapter.__class__.__name__,
                     "connected": container.adapter.is_connected(),
+                    "inbox_dir": getattr(container.adapter, "inbox_dir", None),
+                    "archive_dir": getattr(container.adapter, "archive_dir", None),
+                    "outbox_dir": getattr(container.adapter, "outbox_dir", None),
+                    "health": container.adapter.get_health_snapshot(),
                 }
             )
         return {"integrations": integrations}
@@ -100,3 +108,19 @@ class BrokerIntegrationService:
             raise ValueError("Account is not using simulated broker adapter")
         container.adapter.push_event(event_type=event_type, payload=payload)
         return {"status": "queued", "account_id": account_id, "event_type": event_type}
+
+    def submit_prepared_ticket(
+        self,
+        account_id: str,
+        ticket: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        container = self._account_registry.get_container(account_id)
+        adapter = container.adapter
+        if not adapter.supports_order_ticket_submission():
+            return {
+                "provider": container.account.broker_id,
+                "status": "pending_broker_integration",
+                "supported": False,
+                "message": "This broker connection does not support outbound order ticket submission yet.",
+            }
+        return adapter.submit_order_ticket(ticket)

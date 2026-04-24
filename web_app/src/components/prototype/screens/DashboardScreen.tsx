@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from 'react-query';
 import { Area, Bar, CartesianGrid, ComposedChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
@@ -1005,7 +1005,13 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
   };
 }
 
-function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, unknown>, overview: OverviewData | undefined) {
+function buildGroupVisuals(
+  sectionTitle: string,
+  mergedResults: Record<string, unknown>,
+  overview: OverviewData | undefined,
+  focusedChartTitle?: string | null,
+  registerChartRef?: (title: string) => (node: HTMLDivElement | null) => void,
+) {
   const trades = overview?.trades || [];
   const closed = trades.filter((trade) => trade.is_closed);
   const returns = buildReturns(trades);
@@ -1017,7 +1023,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
     const costSummary = (mergedResults.cost_summary as Record<string, unknown>) || {};
     return (
       <div className="grid gap-4 lg:grid-cols-3">
-        <VisualCard title="Cost Breakdown">
+        <VisualCard title="Cost Breakdown" highlighted={focusedChartTitle === 'Cost Breakdown'} cardRef={registerChartRef?.('Cost Breakdown')}>
           <MetricsBarChart
             data={[
               { metric: 'Brokerage', value: Number(costSummary.total_brokerage || 0) },
@@ -1038,12 +1044,12 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
     return (
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
         <div className="lg:row-span-2">
-          <VisualCard title="Equity Curve" className="h-[680px]">
+          <VisualCard title="Equity Curve" className="h-[680px]" highlighted={focusedChartTitle === 'Equity Curve'} cardRef={registerChartRef?.('Equity Curve')}>
             <EquityCurveChart data={equity} className="h-[680px]" />
           </VisualCard>
         </div>
         <div className="grid gap-4">
-          <VisualCard title="Rolling Sharpe" className="h-[340px]">
+          <VisualCard title="Rolling Sharpe" className="h-[340px]" highlighted={focusedChartTitle === 'Rolling Sharpe'} cardRef={registerChartRef?.('Rolling Sharpe')}>
             <GenericTimeSeriesChart
               data={rollingSharpeSeries}
               series={[{ key: 'rolling', color: '#1d4ed8', name: 'Rolling Sharpe' }]}
@@ -1052,7 +1058,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
               tooltipLabelFormatter={(label) => formatDate(label)}
             />
           </VisualCard>
-          <VisualCard title="Performance Snapshot" className="h-[340px]">
+          <VisualCard title="Performance Snapshot" className="h-[340px]" highlighted={focusedChartTitle === 'Performance Snapshot'} cardRef={registerChartRef?.('Performance Snapshot')}>
             <MetricsBarChart 
               data={[
                 { metric: 'Sharpe', value: Number(extractScalar(mergedResults.sharpe) || 0) },
@@ -1080,7 +1086,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
             />
           </VisualCard>
         </div>
-        <VisualCard title="Outcome Mix" className="h-[300px]">
+        <VisualCard title="Outcome Mix" className="h-[300px]" highlighted={focusedChartTitle === 'Outcome Mix'} cardRef={registerChartRef?.('Outcome Mix')}>
           <PieMetricChart 
             data={[
               { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
@@ -1099,7 +1105,7 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
     const drawdowns = toNumberArray(mergedResults.rolling_drawdown);
     return (
       <div className="grid gap-4 lg:grid-cols-2">
-        <VisualCard title="Volatility Curves">
+        <VisualCard title="Volatility Curves" highlighted={focusedChartTitle === 'Volatility Curves'} cardRef={registerChartRef?.('Volatility Curves')}>
           <GenericTimeSeriesChart
             data={rollingVol.map((value, index) => ({
               label: `W${index + 1}`,
@@ -1112,13 +1118,13 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
             ]}
           />
         </VisualCard>
-        <VisualCard title="Drawdown Curve">
+        <VisualCard title="Drawdown Curve" highlighted={focusedChartTitle === 'Drawdown Curve'} cardRef={registerChartRef?.('Drawdown Curve')}>
           <GenericTimeSeriesChart
             data={buildLabeledSeries(drawdowns, 'T', 'drawdown')}
             series={[{ key: 'drawdown', color: '#b91c1c', name: 'Rolling Drawdown' }]}
           />
         </VisualCard>
-        <VisualCard title="Risk Snapshot">
+        <VisualCard title="Risk Snapshot" highlighted={focusedChartTitle === 'Risk Snapshot'} cardRef={registerChartRef?.('Risk Snapshot')}>
           <MetricsBarChart data={[
             { metric: 'Volatility', value: Number(extractScalar(mergedResults.volatility) || 0) },
             { metric: 'Max DD', value: Math.abs(Number(extractScalar(mergedResults.max_drawdown) || 0)) },
@@ -1329,10 +1335,30 @@ function buildGroupVisuals(sectionTitle: string, mergedResults: Record<string, u
   return null;
 }
 
-function VisualCard({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
+function VisualCard({
+  title,
+  children,
+  className = "",
+  highlighted = false,
+  cardRef,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  highlighted?: boolean;
+  cardRef?: (node: HTMLDivElement | null) => void;
+}) {
   return (
-    <div className={`flex min-h-0 flex-col rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${className}`}>
-      <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
+    <div
+      ref={cardRef}
+      className={`flex min-h-0 flex-col rounded-[22px] border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-[#0b0b0b] ${
+        highlighted ? 'ring-2 ring-[#ff5900] shadow-[0_0_0_1px_rgba(255,89,0,0.3),0_22px_54px_rgba(255,89,0,0.16)]' : ''
+      } ${className}`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-black dark:text-white">{title}</h3>
+        {highlighted ? <span className="rounded-full bg-[#ff5900]/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#ff5900]">Insight focus</span> : null}
+      </div>
       <div className="mt-3 min-h-0 flex-1 overflow-hidden" style={{ height: className.includes('h-[') ? 'auto' : '220px' }}>
         {children}
       </div>
@@ -1340,7 +1366,11 @@ function VisualCard({ title, children, className = "" }: { title: string; childr
   );
 }
 
-function renderDashboardContracts(contracts: DashboardChartContract[]) {
+function renderDashboardContracts(
+  contracts: DashboardChartContract[],
+  focusedChartTitle?: string | null,
+  registerChartRef?: (title: string) => (node: HTMLDivElement | null) => void,
+) {
   const filteredContracts = contracts.filter((contract) => {
     const title = String(contract.title || '').toLowerCase();
     return !title.includes('trade count') && !title.includes('total completed trades');
@@ -1349,7 +1379,12 @@ function renderDashboardContracts(contracts: DashboardChartContract[]) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {filteredContracts.map((contract) => (
-        <VisualCard key={`${contract.chart_type}-${contract.title}`} title={contract.title}>
+        <VisualCard
+          key={`${contract.chart_type}-${contract.title}`}
+          title={contract.title}
+          highlighted={focusedChartTitle === contract.title}
+          cardRef={registerChartRef?.(contract.title)}
+        >
           {contract.chart_type === 'bar' ? <MetricsBarChart data={(contract.points || []) as Array<{ metric: string; value: number }>} /> : null}
           {contract.chart_type === 'pie' ? <PieMetricChart data={(contract.points || []) as Array<{ name: string; value: number }>} /> : null}
           {contract.chart_type === 'radar' ? <RadarMetricChart data={(contract.points || []) as Array<{ metric: string; value: number }>} /> : null}
@@ -1486,10 +1521,30 @@ function CompactBreakdownCard({
   );
 }
 
-function TopFoldPanel({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) {
+function TopFoldPanel({
+  title,
+  children,
+  className = '',
+  highlighted = false,
+  panelRef,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+  highlighted?: boolean;
+  panelRef?: (node: HTMLDivElement | null) => void;
+}) {
   return (
-    <div className={`rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606] ${className}`.trim()}>
-      <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{title}</h3>
+    <div
+      ref={panelRef}
+      className={`rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#060606] ${
+        highlighted ? 'ring-2 ring-[#ff5900] shadow-[0_0_0_1px_rgba(255,89,0,0.3),0_22px_54px_rgba(255,89,0,0.16)]' : ''
+      } ${className}`.trim()}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-black/55 dark:text-white/55">{title}</h3>
+        {highlighted ? <span className="rounded-full bg-[#ff5900]/12 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#ff5900]">Insight focus</span> : null}
+      </div>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -1653,6 +1708,7 @@ function matchesBucketOrCustom(value: number, filter: string, low: number, high:
 
 export function DashboardScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
+  const dashboardInsightFocus = usePrototypeStore((state) => state.dashboardInsightFocus);
   const dashboardGroupOrder = usePrototypeStore((state) => state.dashboardGroupOrder);
   const dashboardMetricGroup = usePrototypeStore((state) => state.dashboardMetricGroup);
   const dashboardTopWidgetVisibility = usePrototypeStore((state) => state.dashboardTopWidgetVisibility);
@@ -1666,6 +1722,8 @@ export function DashboardScreen() {
   });
   const { data: chartCatalog } = useQuery(['prototype-chart-catalog'], fetchChartCatalog);
   const [selectedPresetName, setSelectedPresetName] = useState('');
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const chartRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const now = useMemo(() => new Date(), []);
   const {
     strategyFilter,
@@ -1948,6 +2006,21 @@ export function DashboardScreen() {
   const pnlCurve = useMemo(() => buildDailyNetCurve(filteredData?.trades || []), [filteredData]);
   const timePatternInsights = useMemo(() => buildTimePatternInsights(filteredData?.trades || []), [filteredData]);
   const compactHeatmap = useMemo(() => buildCompactTimeHeatmap(timePatternInsights), [timePatternInsights]);
+  const registerGroupRef = (title: string) => (node: HTMLDivElement | null) => {
+    groupRefs.current[title] = node;
+  };
+  const registerChartRef = (title: string) => (node: HTMLDivElement | null) => {
+    chartRefs.current[title] = node;
+  };
+
+  useEffect(() => {
+    if (!dashboardInsightFocus) return;
+    const focusNode =
+      (dashboardInsightFocus.chartTitle ? chartRefs.current[dashboardInsightFocus.chartTitle] : null) ||
+      (dashboardInsightFocus.groupTitle ? groupRefs.current[dashboardInsightFocus.groupTitle] : null);
+    focusNode?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [dashboardInsightFocus]);
+
   if (isLoading) {
     return <p className="text-sm text-gray-600 dark:text-slate-400">Loading dashboard…</p>;
   }
@@ -2228,7 +2301,11 @@ export function DashboardScreen() {
 
       <section className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(360px,1fr)]">
         <div className="grid gap-6">
-          <TopFoldPanel title="Net P&L Curve">
+          <TopFoldPanel
+            title="Net P&L Curve"
+            highlighted={dashboardInsightFocus?.chartTitle === 'Net P&L Curve'}
+            panelRef={registerChartRef('Net P&L Curve')}
+          >
             {pnlCurve.length ? (
               <FriendlyPnlChart data={pnlCurve} />
             ) : (
@@ -2253,7 +2330,11 @@ export function DashboardScreen() {
           </div>
         </div>
 
-        <TopFoldPanel title="Trade Outcomes">
+        <TopFoldPanel
+          title="Trade Outcomes"
+          highlighted={dashboardInsightFocus?.chartTitle === 'Trade Outcomes'}
+          panelRef={registerChartRef('Trade Outcomes')}
+        >
           <div className="grid gap-5">
             <ComparisonBars
               title="Avg Win vs Avg Loss"
@@ -2341,7 +2422,12 @@ export function DashboardScreen() {
           return (
             <div
               key={section.title}
-              className="rounded-[28px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]"
+              ref={registerGroupRef(section.title)}
+              className={`rounded-[28px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606] ${
+                dashboardInsightFocus?.groupTitle === section.title
+                  ? 'ring-2 ring-[#ff5900] shadow-[0_0_0_1px_rgba(255,89,0,0.3),0_22px_54px_rgba(255,89,0,0.16)]'
+                  : ''
+              }`}
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -2367,8 +2453,18 @@ export function DashboardScreen() {
 
               <div className="mt-5">
                 {chartContracts?.groups?.[section.title]?.length
-                  ? renderDashboardContracts(chartContracts.groups[section.title])
-                  : buildGroupVisuals(section.title, mergedResults, filteredData)}
+                  ? renderDashboardContracts(
+                      chartContracts.groups[section.title],
+                      dashboardInsightFocus?.chartTitle,
+                      registerChartRef,
+                    )
+                  : buildGroupVisuals(
+                      section.title,
+                      mergedResults,
+                      filteredData,
+                      dashboardInsightFocus?.chartTitle,
+                      registerChartRef,
+                    )}
               </div>
 
               <div className="mt-5 grid auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -7,6 +7,7 @@ from api.accounts.router import router as accounts_router
 from api.trade_ingestion.router import router as trade_ingestion_router
 from api.metric_computation.router import router as metric_computation_router
 from api.ai_diagnostic.router import router as ai_diagnostic_router
+from api.ai_insights.router import router as ai_insights_router
 from api.decision_engine.router import router as decision_engine_router
 from api.execution_tools.router import router as execution_tools_router
 from api.risk_modeling.router import router as risk_modeling_router
@@ -35,6 +36,7 @@ api_router.include_router(accounts_router)
 api_router.include_router(trade_ingestion_router)
 api_router.include_router(metric_computation_router)
 api_router.include_router(ai_diagnostic_router)
+api_router.include_router(ai_insights_router)
 api_router.include_router(decision_engine_router)
 api_router.include_router(execution_tools_router)
 api_router.include_router(risk_modeling_router)

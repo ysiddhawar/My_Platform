@@ -20,6 +20,8 @@ def net_sharpe(context):
 
     if returns is None:
         return None
+    returns = returns[np.isfinite(returns)]
+    returns = returns[returns > -1.0]
 
     n = returns.size
     if n < 30:
@@ -63,6 +65,8 @@ def net_cagr(context):
 
     if returns is None:
         return None
+    returns = returns[np.isfinite(returns)]
+    returns = returns[returns > -1.0]
 
     n = returns.size
     if n < 30:
@@ -76,7 +80,12 @@ def net_cagr(context):
         periods = 252
 
     log_returns = np.log1p(returns)
+    log_returns = log_returns[np.isfinite(log_returns)]
+    if log_returns.size == 0:
+        return None
     total_log = np.sum(log_returns)
+    if not np.isfinite(total_log):
+        return None
 
     years = n / periods
     if years <= 0:
@@ -107,6 +116,8 @@ def net_sortino(context):
 
     if returns is None:
         return None
+    returns = returns[np.isfinite(returns)]
+    returns = returns[returns > -1.0]
 
     downside = returns[returns < 0]
 
