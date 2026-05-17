@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -98,6 +100,69 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
             "message": "MT5 integration is sync-only. Place trades in MT5 and MyPlatform will import historical, open, and future trade updates automatically.",
         }
 
+    def self_test(self) -> Dict[str, Any]:
+        """
+        Write a test file to the inbox, poll for it, verify it archives.
+        Returns a detailed result dict with pass/fail per step.
+        """
+        steps: list[dict[str, Any]] = []
+        self._connect_impl()
+
+        # Step 1: check inbox exists and is writable
+        inbox_ok = self._inbox_dir.exists()
+        writable = os.access(self._inbox_dir, os.W_OK)
+        steps.append({"step": "inbox_writable", "ok": inbox_ok and writable, "detail": str(self._inbox_dir)})
+
+        # Step 2: write a test file
+        test_filename = f"__self_test_{uuid.uuid4().hex[:8]}.json"
+        test_payload = {"event_type": "SELF_TEST", "payload": {"ts": time.time(), "source": "self_test"}}
+        try:
+            test_path = self._inbox_dir / test_filename
+            test_path.write_text(json.dumps(test_payload), encoding="utf-8")
+            steps.append({"step": "write_test_file", "ok": True, "detail": str(test_path)})
+        except Exception as exc:
+            steps.append({"step": "write_test_file", "ok": False, "detail": str(exc)})
+            return {"overall": "FAIL", "steps": steps}
+
+        # Step 3: poll for the file
+        try:
+            polled = self._poll_event()
+            if polled is not None and polled.get("event_type") == "SELF_TEST":
+                steps.append({"step": "poll_event", "ok": True, "detail": "Test file polled successfully"})
+            else:
+                steps.append({"step": "poll_event", "ok": False, "detail": f"Expected SELF_TEST, got {polled.get('event_type') if polled else 'None'}"})
+        except Exception as exc:
+            steps.append({"step": "poll_event", "ok": False, "detail": str(exc)})
+
+        # Step 4: check file moved to archive
+        archived = self._archive_dir / test_filename
+        failed_archived = list(self._archive_dir.glob(f"failed_*_{test_filename}"))
+        if archived.exists():
+            steps.append({"step": "file_archived", "ok": True, "detail": str(archived)})
+            # clean up
+            try:
+                archived.unlink()
+            except Exception:
+                pass
+        elif failed_archived:
+            steps.append({"step": "file_archived", "ok": False, "detail": f"File moved to failed bucket: {failed_archived[0]}"})
+        else:
+            steps.append({"step": "file_archived", "ok": False, "detail": f"Not found in archive dir ({self._archive_dir})"})
+            # orphan cleanup — scan for any self-test files left in inbox
+            for orphan in self._inbox_dir.glob("__self_test_*.json"):
+                try:
+                    orphan.unlink()
+                except Exception:
+                    pass
+
+        # Step 5: verify archive is writable
+        archive_ok = self._archive_dir.exists()
+        archive_writable = os.access(self._archive_dir, os.W_OK)
+        steps.append({"step": "archive_writable", "ok": archive_ok and archive_writable, "detail": str(self._archive_dir)})
+
+        passed = all(s["ok"] for s in steps)
+        return {"overall": "PASS" if passed else "FAIL", "steps": steps}
+
     def get_health_snapshot(self) -> Dict[str, Any]:
         inbox_files = sorted(self._inbox_dir.glob("*.json")) if self._inbox_dir.exists() else []
         archive_files = sorted(self._archive_dir.glob("*.json")) if self._archive_dir.exists() else []
@@ -114,6 +179,8 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
             "latest_inbox_mtime": datetime.fromtimestamp(newest_inbox, timezone.utc).isoformat() if newest_inbox else None,
             "latest_archive_mtime": datetime.fromtimestamp(newest_archive, timezone.utc).isoformat() if newest_archive else None,
             "bridge_alive": self.is_connected(),
+            "inbox_dir": str(self._inbox_dir),
+            "archive_dir": str(self._archive_dir),
         }
 
     @property
