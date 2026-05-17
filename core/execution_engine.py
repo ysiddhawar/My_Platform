@@ -1,5 +1,5 @@
-import time
 from __future__ import annotations
+import time
 
 from typing import Any, List, Optional, Callable
 from core.context import ExecutionContext
