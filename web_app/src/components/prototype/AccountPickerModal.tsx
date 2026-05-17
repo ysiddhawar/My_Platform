@@ -59,8 +59,8 @@ export function AccountPickerModal({
   const [error, setError] = useState<string | null>(null);
   const [connectionMode, setConnectionMode] = useState<'simulated' | 'mt5_file_bridge'>('simulated');
   const [mt5Config, setMt5Config] = useState({
-    inbox_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Inbox',
-    archive_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Archive',
+    inbox_dir: '/Users/apple/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform/inbox',
+    archive_dir: '/Users/apple/Library/Application Support/net.metaquotes.wine.metatrader5/drive_c/users/user/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform/archive',
     poll_interval_seconds: '0.25',
     source_account_id: '',
   });
@@ -267,12 +267,7 @@ export function AccountPickerModal({
                   </ol>
                 </div>
 
-                <div className="hidden">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input label="MT5 Inbox Directory" value={mt5Config.inbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, inbox_dir: value }))} />
-                    <Input label="MT5 Archive Directory" value={mt5Config.archive_dir} onChange={(value) => setMt5Config((current) => ({ ...current, archive_dir: value }))} />
-                  </div>
-                </div>
+
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input
                     label="Poll Interval Seconds"
