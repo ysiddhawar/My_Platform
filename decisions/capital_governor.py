@@ -47,6 +47,12 @@ class CapitalGovernor:
         tier = governance_result.get("tier")
         score = governance_result.get("score", 0.0)
 
+        # Type narrowing: ensure tier and score match expected types
+        if tier is None or not isinstance(tier, str):
+            tier = "unknown"
+        if not isinstance(score, (int, float)):
+            score = 0.0
+
         if base_capital <= 0:
             raise CapitalGovernorError("base_capital must be positive")
 

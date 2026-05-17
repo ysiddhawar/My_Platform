@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from 'react-query';
 import { Area, Bar, CartesianGrid, ComposedChart, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
-import { fetchChartCatalog, fetchDashboardChartContracts, fetchOverview, runMetricComputation } from '@/api/prototype';
+import { fetchChartCatalog, fetchDashboardChartContracts, fetchOverview, fetchAccounts, runMetricComputation } from '@/api/prototype';
 import { ChartFrame } from '@/components/charts/ChartFrame';
 import { EquityCurveChart } from '@/components/charts/EquityCurveChart';
 import { GenericTimeSeriesChart } from '@/components/charts/GenericTimeSeriesChart';
@@ -128,8 +128,8 @@ function rollingWindow(values: number[], size: number, mapper: (window: number[]
   return output;
 }
 
-function buildReturns(trades: TradeRecord[]): number[] {
-  let equity = 100000;
+function buildReturns(trades: TradeRecord[], startingCapital: number): number[] {
+  let equity = startingCapital;
   return trades
     .filter((trade) => trade.is_closed)
     .map((trade) => {
@@ -141,10 +141,10 @@ function buildReturns(trades: TradeRecord[]): number[] {
     });
 }
 
-function buildEquitySeries(trades: TradeRecord[]): Array<{ t: string; equity: number }> {
+function buildEquitySeries(trades: TradeRecord[], startingCapital: number): Array<{ t: string; equity: number }> {
   const closed = trades.filter((trade) => trade.is_closed);
   return closed.reduce<Array<{ t: string; equity: number }>>((rows, trade, index) => {
-    const previous = rows[index - 1]?.equity || 100000;
+    const previous = rows[index - 1]?.equity || startingCapital;
     const rawDate = trade.entry_date || trade.entry_time?.slice(0, 10);
     rows.push({
       t: rawDate || `Trade ${index + 1}`,
@@ -154,7 +154,7 @@ function buildEquitySeries(trades: TradeRecord[]): Array<{ t: string; equity: nu
   }, []);
 }
 
-function buildDailyReturns(trades: TradeRecord[], startingCapital = 100000): number[] {
+function buildDailyReturns(trades: TradeRecord[], startingCapital: number): number[] {
   const byDay = new Map<string, number>();
   trades
     .filter((trade) => trade.is_closed)
@@ -742,10 +742,10 @@ function metricRequirement(key: string): string | null {
   return requirements[key] || null;
 }
 
-function buildMetricPayload(data: OverviewData | undefined) {
+function buildMetricPayload(data: OverviewData | undefined, startingCapital: number) {
   const trades = data?.trades || [];
   const closed = trades.filter((trade) => trade.is_closed);
-  const returns = buildDailyReturns(trades);
+  const returns = buildDailyReturns(trades, startingCapital);
   const books = buildBookMatrix(trades, returns);
   const strategyPayload = Object.fromEntries(books.labels.map((label, index) => [label, books.matrix[index]]));
   const spreadMatrix = books.matrix.length
@@ -760,8 +760,8 @@ function buildMetricPayload(data: OverviewData | undefined) {
     slippage: closed.map((trade) => Number(trade.slippage_cost || 0)),
     swaps: closed.map((trade) => Number(trade.swaps || 0)),
     strategies: Object.keys(strategyPayload).length ? strategyPayload : undefined,
-    capital: 100000,
-    total_capital: 100000,
+    capital: startingCapital,
+    total_capital: startingCapital,
     target_volatility: 0.15,
     max_drawdown_threshold: 0.25,
     max_leverage: 3,
@@ -775,10 +775,10 @@ function buildMetricPayload(data: OverviewData | undefined) {
   };
 }
 
-function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unknown> {
+function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: number): Record<string, unknown> {
   const trades = data?.trades || [];
   const closed = trades.filter((trade) => trade.is_closed);
-  const returns = buildReturns(trades);
+  const returns = buildReturns(trades, startingCapital);
   const netPnls = closed.map((trade) => Number(trade.net_pnl || 0));
   const wins = netPnls.filter((value) => value > 0);
   const losses = netPnls.filter((value) => value < 0);
@@ -859,11 +859,11 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
   const bootstrapLow = percentile(returns, 0.1);
   const bootstrapHigh = percentile(returns, 0.9);
   const stabilityScore = Math.max(0, Math.min(1, 0.55 + walkForwardPassRate * 0.2 + Math.max(0, 0.25 - Math.abs(maxDrawdown)) * 0.5));
-  const positionRisk = Number(closed[closed.length - 1]?.risk_amount || Math.max(500, 100000 * 0.01));
+  const positionRisk = Number(closed[closed.length - 1]?.risk_amount || Math.max(500, startingCapital * 0.01));
   const latestEntry = Number(closed[closed.length - 1]?.entry_price || 100);
   const latestStop = Number(closed[closed.length - 1]?.stop_loss_at_entry || latestEntry * 0.98);
   const modelSize = Math.abs(latestEntry - latestStop) > 0 ? positionRisk / Math.abs(latestEntry - latestStop) : 0;
-  const capitalAllocations = Object.fromEntries(books.labels.map((label, index) => [label, Number(((weights[index] || 0) * 100000).toFixed(2))]));
+  const capitalAllocations = Object.fromEntries(books.labels.map((label, index) => [label, Number(((weights[index] || 0) * startingCapital).toFixed(2))]));
   const participationImpact = Math.abs(average(portfolioReturns)) * 0.15;
   const stressWorst = Math.min(
     maxDrawdown,
@@ -909,7 +909,7 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
     net_sharpe: annualizedSharpeRatio(returns),
     net_sortino: annualizedSortinoRatio(returns),
     net_cagr: annualizedGrowth(returns),
-    equity_curve: buildEquitySeries(trades),
+    equity_curve: buildEquitySeries(trades, startingCapital),
 
     volatility: returnsStd,
     rolling_volatility: rollingVolSeries,
@@ -970,13 +970,13 @@ function buildDerivedMetrics(data: OverviewData | undefined): Record<string, unk
     effective_number_of_bets: effectiveBets,
     hierarchical_risk_parity: { max_weight: Math.max(...weights, 0), min_weight: Math.min(...weights, 0) },
     dynamic_cluster_risk_budgeting: { cluster_count: books.labels.length || 1, max_cluster_weight: Math.max(...weights, 1) },
-    drawdown_aware_capital_allocator: { allocated_capital: 100000 * Math.max(0.4, 1 - Math.abs(maxDrawdown)), drawdown_penalty: Math.abs(maxDrawdown) },
+    drawdown_aware_capital_allocator: { allocated_capital: startingCapital * Math.max(0.4, 1 - Math.abs(maxDrawdown)), drawdown_penalty: Math.abs(maxDrawdown) },
 
     risk_budgeting: { allocated_books: books.labels.length || 1, top_weight: Math.max(...weights, 1) },
     kelly: { recommended_fraction: Math.max(0, Math.min(1, payoffRatio * (wins.length / Math.max(1, netPnls.length)) - (losses.length / Math.max(1, netPnls.length)) / Math.max(payoffRatio, 1))), max_fraction: Math.max(...weights, 0) },
-    portfolio_position_sizer: { books_sized: books.labels.length || 1, gross_notional: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || 100000 },
+    portfolio_position_sizer: { books_sized: books.labels.length || 1, gross_notional: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || startingCapital },
     position_sizer: { risk_amount: positionRisk, model_size: modelSize },
-    capital_engine: { allocated_capital: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || 100000, active_books: books.labels.length || 1 },
+    capital_engine: { allocated_capital: Object.values(capitalAllocations).reduce((sum, value) => sum + Number(value), 0) || startingCapital, active_books: books.labels.length || 1 },
 
     kill_switch: { triggered: Math.abs(maxDrawdown) > 0.2, threshold: 0.2 },
     dynamic_throttle: { throttle_level: Math.max(0.25, 1 - Math.abs(maxDrawdown) * 2), active: Math.abs(maxDrawdown) > 0.1 },
@@ -1009,12 +1009,13 @@ function buildGroupVisuals(
   sectionTitle: string,
   mergedResults: Record<string, unknown>,
   overview: OverviewData | undefined,
+  startingCapital: number,
   focusedChartTitle?: string | null,
   registerChartRef?: (title: string) => (node: HTMLDivElement | null) => void,
 ) {
   const trades = overview?.trades || [];
   const closed = trades.filter((trade) => trade.is_closed);
-  const returns = buildReturns(trades);
+  const returns = buildReturns(trades, startingCapital);
   const book = buildBookMatrix(trades, returns);
   const covariance = covarianceMatrix(book.matrix);
   const correlation = correlationFromCovariance(covariance);
@@ -1038,7 +1039,7 @@ function buildGroupVisuals(
   }
 
   if (sectionTitle === 'Performance Metrics') {
-    const equity = (mergedResults.equity_curve as Array<{ t: string; equity: number }>) || buildEquitySeries(trades);
+    const equity = (mergedResults.equity_curve as Array<{ t: string; equity: number }>) || buildEquitySeries(trades, startingCapital);
     const rollingSharpe = toNumberArray(mergedResults.rolling_sharpe);
     const rollingSharpeSeries = buildRollingDateSeries(trades, rollingSharpe, 'rolling', 'W');
     return (
@@ -1720,6 +1721,8 @@ export function DashboardScreen() {
   const { data, isLoading, error } = useQuery(['prototype-overview', accountId], () => fetchOverview(accountId as string), {
     enabled: Boolean(accountId),
   });
+  const { data: accounts } = useQuery(['prototype-accounts'], fetchAccounts);
+  const startingCapital = Number(accounts?.find((a) => a.account_id === accountId)?.initial_balance) || 100000;
   const { data: chartCatalog } = useQuery(['prototype-chart-catalog'], fetchChartCatalog);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1847,7 +1850,7 @@ export function DashboardScreen() {
     };
   }, [data, marketFilter, sideFilter, statusFilter, strategyFilter, symbolFilter, mistakeFilter, datePreset, now, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter, spreadThresholds, slippageThresholds, quantityThresholds, costThresholds, pnlThresholds, riskThresholds, rrrThresholds, rMultipleThresholds, confidenceThresholds]);
 
-  const metricPayload = useMemo(() => buildMetricPayload(filteredData), [filteredData]);
+  const metricPayload = useMemo(() => buildMetricPayload(filteredData, startingCapital), [filteredData, startingCapital]);
   const { data: metricRun, isLoading: metricsLoading } = useQuery(
     ['prototype-dashboard-metrics', accountId, filteredData?.trades?.length, filteredData?.sessionDailyTotals?.length, filteredData?.missedOpportunityCount, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
     () => runMetricComputation({ data: metricPayload, phase: 'research' }),
@@ -1858,7 +1861,7 @@ export function DashboardScreen() {
     const trades = filteredData?.trades || [];
     const closed = trades.filter((trade) => trade.is_closed);
     const closedPnls = closed.map((trade) => Number(trade.net_pnl || 0));
-    const returns = buildReturns(trades);
+    const returns = buildReturns(trades, startingCapital);
     const winTrades = closed.filter((trade) => Number(trade.net_pnl || 0) > 0);
     const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
     const wins = winTrades.length;
@@ -1931,7 +1934,7 @@ export function DashboardScreen() {
   }, [filteredData]);
 
   const dashboardResults = metricRun?.results || {};
-  const derivedMetrics = useMemo(() => buildDerivedMetrics(filteredData), [filteredData]);
+  const derivedMetrics = useMemo(() => buildDerivedMetrics(filteredData, startingCapital), [filteredData, startingCapital]);
   const sectionMap = useMemo(() => new Map(defaultMetricSections.map((section) => [section.title, section])), []);
   const displayedSections = useMemo(() => {
     const allKeys = defaultMetricSections.flatMap((section) => section.keys);
@@ -2462,6 +2465,7 @@ export function DashboardScreen() {
                       section.title,
                       mergedResults,
                       filteredData,
+                      startingCapital,
                       dashboardInsightFocus?.chartTitle,
                       registerChartRef,
                     )}

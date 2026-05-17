@@ -1,6 +1,13 @@
 import time
-from typing import List, Optional, Callable
+from __future__ import annotations
+
+from typing import Any, List, Optional, Callable
 from core.context import ExecutionContext
+
+
+class MetricComputationError(Exception):
+    """Exception raised when a metric computation fails."""
+    pass
 
 
 class ExecutionEngine:
@@ -16,7 +23,7 @@ class ExecutionEngine:
 
     def __init__(self, fail_fast: bool = False):
         self.fail_fast = fail_fast
-        self._events = []
+        self._events: list[Any] = []
 
     # -------------------------------------------------
     # EXECUTION
@@ -76,10 +83,18 @@ class ExecutionEngine:
                 result = func(context)
                 context.set_result(name, result)
 
+            except (ValueError, TypeError, ZeroDivisionError, IndexError, AttributeError) as e:
+                # Wrap specific computation errors in MetricComputationError
+                wrapped_error = MetricComputationError(f"Metric '{name}' computation failed: {e}")
+                context.set_error(name, wrapped_error)
+                if self.fail_fast:
+                    raise wrapped_error from e
+                context.set_result(name, None)
             except Exception as e:
+                # Other exceptions (for robustness in non-fail-fast mode)
                 context.set_error(name, e)
                 if self.fail_fast:
-                    raise e
+                    raise
                 context.set_result(name, None)
 
             finally:

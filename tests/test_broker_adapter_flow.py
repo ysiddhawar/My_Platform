@@ -49,13 +49,11 @@ class BrokerAdapterFlowTests(unittest.TestCase):
     def test_mt5_file_bridge_records_trade(self):
         inbox = Path(self._tmp.name) / "mt5_inbox"
         archive = Path(self._tmp.name) / "mt5_archive"
-        outbox = Path(self._tmp.name) / "mt5_outbox"
         self.integration_service.register_mt5_file_bridge(
             account_id=self.account.account_id,
             broker_id="MT5-BROKER",
             inbox_dir=str(inbox),
             archive_dir=str(archive),
-            outbox_dir=str(outbox),
             poll_interval_seconds=0.05,
         )
 
@@ -93,16 +91,14 @@ class BrokerAdapterFlowTests(unittest.TestCase):
         self.assertEqual(recorded.to_dict()["symbol"], "EURUSD")
         self.assertTrue((archive / "event_001.json").exists())
 
-    def test_mt5_file_bridge_writes_prepared_ticket_to_outbox(self):
+    def test_mt5_file_bridge_is_sync_only_for_prepared_tickets(self):
         inbox = Path(self._tmp.name) / "mt5_inbox"
         archive = Path(self._tmp.name) / "mt5_archive"
-        outbox = Path(self._tmp.name) / "mt5_outbox"
         self.integration_service.register_mt5_file_bridge(
             account_id=self.account.account_id,
             broker_id="MT5-BROKER",
             inbox_dir=str(inbox),
             archive_dir=str(archive),
-            outbox_dir=str(outbox),
             poll_interval_seconds=0.05,
         )
 
@@ -119,19 +115,18 @@ class BrokerAdapterFlowTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(result["status"], "submitted_to_broker_bridge")
-        self.assertTrue((outbox / "order_ticket_ticket-123.json").exists())
+        self.assertEqual(result["status"], "sync_only")
+        self.assertFalse(result["supported"])
+        self.assertIn("sync-only", result["message"])
 
     def test_mt5_fill_merges_prepared_context_but_keeps_actual_entry_snapshot(self):
         inbox = Path(self._tmp.name) / "mt5_inbox"
         archive = Path(self._tmp.name) / "mt5_archive"
-        outbox = Path(self._tmp.name) / "mt5_outbox"
         self.integration_service.register_mt5_file_bridge(
             account_id=self.account.account_id,
             broker_id="MT5-BROKER",
             inbox_dir=str(inbox),
             archive_dir=str(archive),
-            outbox_dir=str(outbox),
             poll_interval_seconds=0.05,
         )
 

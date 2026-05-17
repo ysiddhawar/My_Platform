@@ -12,6 +12,7 @@ export type AccountSummary = {
   account_id: string;
   account_name?: string | null;
   broker_id?: string | null;
+  initial_balance?: number | null;
   base_currency?: string | null;
   risk_level?: string | null;
   supported_market_types?: string[];
@@ -25,21 +26,16 @@ export type AccountIntegration = {
   connected?: boolean;
   inbox_dir?: string | null;
   archive_dir?: string | null;
-  outbox_dir?: string | null;
   health?: {
     connected?: boolean;
     status?: string | null;
     bridge_alive?: boolean;
     inbox_pending_count?: number;
-    outbox_pending_count?: number;
     archive_file_count?: number;
     last_event_at?: string | null;
     last_event_type?: string | null;
     last_event_file?: string | null;
-    last_command_at?: string | null;
-    last_command_file?: string | null;
     latest_inbox_mtime?: string | null;
-    latest_outbox_mtime?: string | null;
     latest_archive_mtime?: string | null;
   } | null;
 };
@@ -61,7 +57,6 @@ export type Mt5FileBridgeInput = {
   broker_id?: string;
   inbox_dir: string;
   archive_dir?: string;
-  outbox_dir?: string;
   poll_interval_seconds?: number;
 };
 

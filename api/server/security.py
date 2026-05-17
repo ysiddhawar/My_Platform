@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException, Request
@@ -7,6 +8,9 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from api.server.api_registry import api_registry
+from api.server.auth_service import AuthServiceError
+
+logger = logging.getLogger(__name__)
 
 
 PUBLIC_PATH_PREFIXES = (
@@ -35,8 +39,17 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         token = auth_header.split(" ", 1)[1].strip()
         try:
             auth_context = api_registry.auth_service.authenticate_token(token)
-        except Exception as exc:
+        except AuthServiceError as exc:
+            # Authentication-specific errors (invalid token, expired session, etc.)
             return JSONResponse(status_code=401, content={"detail": str(exc)})
+        except Exception as exc:
+            # System errors (database issues, network problems, etc.)
+            # Log the actual error for debugging but return a generic message
+            logger.error(f"Authentication system error: {exc}", exc_info=True)
+            return JSONResponse(
+                status_code=500, 
+                content={"detail": "Internal authentication error"}
+            )
 
         request.state.auth_context = auth_context
         return await call_next(request)

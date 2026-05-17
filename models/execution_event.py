@@ -131,6 +131,11 @@ class ExecutionEvent:
         self._event_type = event_type or "PRE_TRADE_REQUEST"
         self._timestamp = timestamp or self._created_at
 
+        # Governance defaults (set before branching to avoid duplication)
+        self._violations_detected: List[str] = []
+        self._approved: Optional[bool] = None
+        self._rejection_reason: Optional[str] = None
+
         # Envelope mode compatibility:
         # many modules use ExecutionEvent(event_type=..., timestamp=..., metadata=...).
         if event_type is not None:
@@ -161,10 +166,7 @@ class ExecutionEvent:
             self._drawdown_snapshot = drawdown_snapshot
             self._open_positions_count = open_positions_count
             self._correlation_exposure_snapshot = correlation_exposure_snapshot or {}
-            self._violations_detected = []
             self._strict_mode = strict_mode
-            self._approved = None
-            self._rejection_reason = None
             self._metadata = metadata or {}
             self._finalized = False
             return
@@ -220,10 +222,7 @@ class ExecutionEvent:
         self._correlation_exposure_snapshot = correlation_exposure_snapshot or {}
 
         # Governance
-        self._violations_detected: List[str] = []
         self._strict_mode = strict_mode
-        self._approved: Optional[bool] = None
-        self._rejection_reason: Optional[str] = None
 
         # System
         self._metadata = metadata or {}
@@ -233,8 +232,8 @@ class ExecutionEvent:
     # VALIDATION UTILITIES
     # =====================================================
 
-    def _validate_non_empty(self, value: str, field: str) -> str:
-        if not isinstance(value, str) or not value.strip():
+    def _validate_non_empty(self, value: Optional[str], field: str) -> str:
+        if value is None or not isinstance(value, str) or not value.strip():
             raise ExecutionEventValidationError(f"{field} must be non-empty string")
         return value.strip()
 
@@ -243,7 +242,9 @@ class ExecutionEvent:
             raise ExecutionEventValidationError(f"{field} must be positive")
         return float(value)
 
-    def _validate_side(self, side: str) -> str:
+    def _validate_side(self, side: Optional[str]) -> str:
+        if side is None:
+            raise ExecutionEventValidationError("side must be 'buy' or 'sell'")
         side = side.lower()
         if side not in ("buy", "sell"):
             raise ExecutionEventValidationError("side must be 'buy' or 'sell'")

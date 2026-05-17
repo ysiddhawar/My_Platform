@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from 'react-query';
 
-import { fetchStrategies, prepareOrderTicket, previewPositionPlan, updateExecutionConfig } from '@/api/prototype';
+import { fetchAccounts, fetchStrategies, prepareOrderTicket, previewPositionPlan, updateExecutionConfig } from '@/api/prototype';
 import { StatCard } from '@/components/prototype/domain/StatCard';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import type { StrategyRecord } from '@/types/prototype';
@@ -55,9 +55,15 @@ export function PositionSizerScreen() {
   const [toolDisciplineMode, setToolDisciplineMode] = useState(true);
   const [activeField, setActiveField] = useState<'strategy' | 'probability' | 'checklist' | null>(null);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [mt5SyncNotice, setMt5SyncNotice] = useState<string | null>(null);
 
   const marketType = useMemo(() => detectMarketType(planner.symbol), [planner.symbol]);
+  const { data: accounts = [] } = useQuery(['prototype-accounts'], fetchAccounts);
   const { data: strategies } = useQuery(['prototype-strategies'], fetchStrategies);
+  const brokerId = useMemo(
+    () => accounts.find((account) => account.account_id === accountId)?.broker_id || 'BROKER',
+    [accounts, accountId],
+  );
 
   const selectedStrategy = useMemo(
     () => (strategies || []).find((strategy) => strategy.name === planner.strategy_setup),
@@ -75,11 +81,11 @@ export function PositionSizerScreen() {
   }, [riskPercent, appDisciplineMode, toolDisciplineMode, accountId]);
 
   const previewQuery = useQuery(
-    ['prototype-position-preview', accountId, planner, marketType, riskPercent, appDisciplineMode, toolDisciplineMode],
+    ['prototype-position-preview', accountId, brokerId, planner, marketType, riskPercent, appDisciplineMode, toolDisciplineMode],
     () =>
       previewPositionPlan({
         account_id: accountId as string,
-        broker_id: 'BROKER',
+        broker_id: brokerId,
         market_type: marketType,
         ...planner,
       }),
@@ -90,7 +96,7 @@ export function PositionSizerScreen() {
     () =>
       prepareOrderTicket({
         account_id: accountId as string,
-        broker_id: 'BROKER',
+        broker_id: brokerId,
         market_type: marketType,
         ...planner,
       }),
@@ -134,6 +140,13 @@ export function PositionSizerScreen() {
       setActiveField((missingFields[0] as 'strategy' | 'probability' | 'checklist') || 'strategy');
       return;
     }
+    if (brokerId === 'MT5') {
+      setMt5SyncNotice(
+        'MT5 sync is active. Place and manage the trade in MT5 directly. MyPlatform will import historical trades plus future opens, closes, SL/TP changes, scale-ins, and partial exits automatically.',
+      );
+      return;
+    }
+    setMt5SyncNotice(null);
     proceedMutation.mutate();
   };
 
@@ -284,6 +297,12 @@ export function PositionSizerScreen() {
             ) : null}
             {proceedMutation.isSuccess ? <span className="text-sm text-emerald-700 dark:text-emerald-300">Broker order ticket prepared.</span> : null}
           </div>
+          {brokerId === 'MT5' ? (
+            <p className="mt-3 text-sm text-black/70 dark:text-white/70">
+              MT5 is connected in sync-only mode. This screen can still help you plan the trade, but execution and management stay inside MT5.
+            </p>
+          ) : null}
+          {mt5SyncNotice ? <p className="mt-3 text-sm text-emerald-700 dark:text-emerald-300">{mt5SyncNotice}</p> : null}
           {proceedMutation.data?.launch?.message ? (
             <p className="mt-3 text-sm text-black/70 dark:text-white/70">{proceedMutation.data.launch.message}</p>
           ) : null}

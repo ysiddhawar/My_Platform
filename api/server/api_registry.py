@@ -202,6 +202,7 @@ class APIRegistry:
             event_bus=self.event_bus,
             trade_repository=self.trade_repository,
             screenshot_capture_service=self.screenshot_capture_service,
+            account_repository=self.account_repository,
         )
 
         self.diagnostic_orchestrator = DiagnosticOrchestrator()
@@ -249,6 +250,10 @@ class APIRegistry:
     def startup(self) -> None:
         if self._started:
             return
+        try:
+            self.broker_integration_service.restore_persisted_integrations()
+        except Exception:
+            pass
         self.health_monitor.start()
         self._started = True
 

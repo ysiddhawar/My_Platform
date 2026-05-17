@@ -10,17 +10,14 @@ type AccountPickerModalProps = {
   onClose?: () => void;
   onCreateAccount: (payload: CreateAccountInput) => Promise<AccountSummary>;
   onConnectMt5: (payload: Mt5FileBridgeInput) => Promise<void>;
-  onValidateMt5: (payload: { inbox_dir: string; archive_dir?: string; outbox_dir?: string }) => Promise<{
+  onValidateMt5: (payload: { inbox_dir: string; archive_dir?: string }) => Promise<{
     ok: boolean;
     inbox_dir: string;
     archive_dir: string;
-    outbox_dir: string;
     inbox_exists: boolean;
     archive_exists: boolean;
-    outbox_exists: boolean;
     inbox_writable: boolean;
     archive_writable: boolean;
-    outbox_writable: boolean;
     warnings: string[];
     instructions: string[];
   }>;
@@ -62,22 +59,18 @@ export function AccountPickerModal({
   const [error, setError] = useState<string | null>(null);
   const [connectionMode, setConnectionMode] = useState<'simulated' | 'mt5_file_bridge'>('simulated');
   const [mt5Config, setMt5Config] = useState({
-    inbox_dir: '',
-    archive_dir: '',
-    outbox_dir: '',
+    inbox_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Inbox',
+    archive_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Archive',
     poll_interval_seconds: '0.25',
   });
   const [mt5Validation, setMt5Validation] = useState<{
     ok: boolean;
     inbox_dir: string;
     archive_dir: string;
-    outbox_dir: string;
     inbox_exists: boolean;
     archive_exists: boolean;
-    outbox_exists: boolean;
     inbox_writable: boolean;
     archive_writable: boolean;
-    outbox_writable: boolean;
     warnings: string[];
     instructions: string[];
   } | null>(null);
@@ -188,10 +181,9 @@ export function AccountPickerModal({
                             {health.last_event_type ? <span>Last event: {health.last_event_type}</span> : null}
                           </div>
                           <div className="mt-2 grid gap-1">
-                            <p>Inbox pending: {health.inbox_pending_count ?? 0} · Outbox pending: {health.outbox_pending_count ?? 0}</p>
+                            <p>Inbox pending: {health.inbox_pending_count ?? 0}</p>
                             <p>Archive files: {health.archive_file_count ?? 0}</p>
                             <p>Last MT5 event: {formatHealthTimestamp(health.last_event_at)}</p>
-                            <p>Last ticket handoff: {formatHealthTimestamp(health.last_command_at)}</p>
                           </div>
                         </div>
                       ) : null}
@@ -268,17 +260,17 @@ export function AccountPickerModal({
                   <ol className="mt-3 space-y-2 text-sm leading-6 text-black/70 dark:text-white/70">
                     <li>1. Use folders inside MetaTrader's shared Common Files area so the EA and MyPlatform can both access them.</li>
                     <li>2. Point your MT5 bridge or EA event writer to a local inbox directory.</li>
-                    <li>3. Point your MT5 bridge or EA command reader to a local outbox directory.</li>
-                    <li>4. MyPlatform watches the inbox for JSON trade events and writes prepared order tickets into the outbox.</li>
-                    <li>5. Processed inbox files move into the archive directory so they are not replayed.</li>
-                    <li>6. Use Validate before saving to confirm the paths are usable on this machine.</li>
+                    <li>3. MyPlatform watches the inbox for JSON trade events from MT5 and imports them into Journal, Calendar, Dashboard, and AI.</li>
+                    <li>4. Processed inbox files move into the archive directory so they are not replayed.</li>
+                    <li>5. Use Validate before saving to confirm the paths are usable on this machine.</li>
                   </ol>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Input label="MT5 Inbox Directory" value={mt5Config.inbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, inbox_dir: value }))} />
-                  <Input label="MT5 Archive Directory" value={mt5Config.archive_dir} onChange={(value) => setMt5Config((current) => ({ ...current, archive_dir: value }))} />
-                  <Input label="MT5 Outbox Directory" value={mt5Config.outbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, outbox_dir: value }))} />
+                <div className="hidden">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Input label="MT5 Inbox Directory" value={mt5Config.inbox_dir} onChange={(value) => setMt5Config((current) => ({ ...current, inbox_dir: value }))} />
+                    <Input label="MT5 Archive Directory" value={mt5Config.archive_dir} onChange={(value) => setMt5Config((current) => ({ ...current, archive_dir: value }))} />
+                  </div>
                 </div>
                 <Input
                   label="Poll Interval Seconds"
@@ -295,7 +287,6 @@ export function AccountPickerModal({
                         const result = await onValidateMt5({
                           inbox_dir: mt5Config.inbox_dir,
                           archive_dir: mt5Config.archive_dir || undefined,
-                          outbox_dir: mt5Config.outbox_dir || undefined,
                         });
                         setMt5Validation(result);
                       } catch (validationError) {
@@ -315,10 +306,8 @@ export function AccountPickerModal({
                     <div className="mt-3 space-y-1 text-sm text-black/75 dark:text-white/75">
                       <p>Inbox: {mt5Validation.inbox_dir}</p>
                       <p>Archive: {mt5Validation.archive_dir}</p>
-                      <p>Outbox: {mt5Validation.outbox_dir}</p>
                       <p>Inbox ready: {mt5Validation.inbox_writable ? 'Yes' : 'No'}</p>
                       <p>Archive ready: {mt5Validation.archive_writable ? 'Yes' : 'No'}</p>
-                      <p>Outbox ready: {mt5Validation.outbox_writable ? 'Yes' : 'No'}</p>
                     </div>
                     {mt5Validation.warnings.length ? (
                       <div className="mt-3">
@@ -365,7 +354,6 @@ export function AccountPickerModal({
                         broker_id: payload.broker_id,
                         inbox_dir: mt5Config.inbox_dir,
                         archive_dir: mt5Config.archive_dir || undefined,
-                        outbox_dir: mt5Config.outbox_dir || undefined,
                         poll_interval_seconds: Number(mt5Config.poll_interval_seconds || 0.25),
                       });
                     }

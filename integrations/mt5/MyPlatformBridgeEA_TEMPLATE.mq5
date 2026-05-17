@@ -1,32 +1,54 @@
-// Template contract for an MT5 bridge EA.
-// This file documents the intended bridge workflow. It is not wired into the
-// web build and may require project-specific JSON parsing helpers before use.
+// Template contract for an MT5 sync bridge EA.
+//
+// Purpose:
+// - export historical closed trades on init
+// - export currently open positions on init
+// - emit future TRADE_FILLED / TRADE_CLOSED / POSITION_MODIFIED / SCALE_IN / PARTIAL_CLOSE events
+// - write one JSON file per event into Common\Files\MyPlatform\inbox
+//
+// This template is intentionally minimal. See MyPlatformBridgeEA.mq5 for the concrete implementation.
 
 #property strict
 
-input string MyPlatformOutbox = "MyPlatform\\outbox";
 input string MyPlatformInbox = "MyPlatform\\inbox";
+input string BridgeAccountId = "";
+input int PollIntervalSeconds = 1;
 
-void OnTick()
-{
-   // 1. Poll the outbox for OPEN_ORDER_TICKET command files.
-   // 2. Parse the payload and surface the planned entry / stop / target inside MT5.
-   // 3. Keep the final trade confirmation inside MT5.
-}
+int OnInit()
+  {
+   // 1. Optionally sync historical trades.
+   // 2. Optionally sync currently open positions.
+   // 3. Build an in-memory snapshot of current MT5 positions.
+   // 4. Start a timer to detect stop-loss / take-profit edits.
+   EventSetTimer(MathMax(PollIntervalSeconds,1));
+   return(INIT_SUCCEEDED);
+  }
 
-void OnTradeTransaction(const MqlTradeTransaction& trans,
-                        const MqlTradeRequest& request,
-                        const MqlTradeResult& result)
-{
-   // When MT5 confirms a fill or close, write a TRADE_FILLED / TRADE_CLOSED
-   // JSON file into MyPlatformInbox.
-   //
-   // The payload must echo client_ticket_id when available so MyPlatform can
-   // merge the prepared context with the real broker execution values.
-}
+void OnDeinit(const int reason)
+  {
+   EventKillTimer();
+  }
 
-// Suggested implementation notes:
-// - Use a shared/common files location that both MT5 and MyPlatform can access.
-// - Keep inbox and outbox separate.
-// - Move processed outbox command files into an EA-side archive folder after read.
-// - Emit one JSON file per broker event.
+void OnTimer()
+  {
+   // Compare current MT5 positions against the cached snapshot.
+   // Emit POSITION_MODIFIED when SL/TP changes.
+   // Refresh the snapshot.
+  }
+
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+  {
+   // Inspect new deals and convert them into normalized MyPlatform events.
+   // Typical mappings:
+   // - new position -> TRADE_FILLED
+   // - added volume -> SCALE_IN
+   // - reduced volume -> PARTIAL_CLOSE
+   // - zero remaining volume -> TRADE_CLOSED
+  }
+
+// Practical notes:
+// - Use FILE_COMMON so the EA can write into MetaTrader's shared Common Files area.
+// - Keep inbox and archive separate.
+// - Use a stable trade_id based on MT5 position id so lifecycle updates target the same trade in MyPlatform.

@@ -38,6 +38,7 @@ class TradeListener:
         event_bus: ExecutionEventBus,
         trade_repository: Optional[TradeRepository] = None,
         screenshot_capture_service: Optional[ScreenshotCaptureService] = None,
+        account_repository: Optional[Any] = None,
     ):
         self._lock = RLock()
         self.context = context
@@ -45,8 +46,9 @@ class TradeListener:
         self.event_bus = event_bus
         self.trade_repository = trade_repository
         self.screenshot_capture_service = screenshot_capture_service
+        self.account_repository = account_repository
 
-        self._processed_event_ids = set()
+        self._processed_event_ids: set[str] = set()
 
     # ==========================================================
     # MAIN ENTRY
@@ -69,6 +71,9 @@ class TradeListener:
 
             if event_type == "PRE_TRADE_REQUEST":
                 return self._handle_pre_trade(event)
+
+            if event_type == "ACCOUNT_STATE":
+                return self._handle_account_state(event)
 
             if event_type == "TRADE_FILLED":
                 return self._handle_trade_filled(event)
@@ -96,7 +101,9 @@ class TradeListener:
 
     def _handle_pre_trade(self, event: Dict[str, Any]) -> Dict[str, Any]:
 
-        trade_request = event.get("payload")
+        trade_request: dict = event.get("payload") or {}
+        if not isinstance(trade_request, dict):
+            trade_request = {}
 
         result = self.orchestrator.execute_trade(trade_request)
 
@@ -117,6 +124,7 @@ class TradeListener:
     def _handle_trade_filled(self, event: Dict[str, Any]) -> Dict[str, Any]:
 
         payload = dict(event.get("payload") or {})
+        payload = self._normalize_trade_identifier(payload)
         payload = self._merge_prepared_ticket_context(payload)
         active_session = self.context.get_cache("active_platform_session")
         if active_session:
@@ -145,7 +153,7 @@ class TradeListener:
 
     def _handle_trade_closed(self, event: Dict[str, Any]) -> Dict[str, Any]:
 
-        payload = event.get("payload")
+        payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         trade_id = payload.get("trade_id")
 
         trades = self.context.get_cache("trades") or []
@@ -153,19 +161,24 @@ class TradeListener:
 
         for trade in trades:
             if trade.trade_id == trade_id:
+                exit_price_val = payload.get("exit_price")
+                if exit_price_val is None or not isinstance(exit_price_val, (int, float)):
+                    raise TradeListenerError("exit_price required and must be numeric")
+
                 trade.close_trade(
-                    exit_price=payload.get("exit_price"),
+                    exit_price=float(exit_price_val),
                     exit_time=payload.get("exit_time"),
-                    exit_reason=payload.get("exit_reason"),
-                    slippage_at_exit=payload.get("slippage_at_exit", 0.0),
+                    exit_reason=str(payload.get("exit_reason", "")),
+                    slippage_at_exit=float(payload.get("slippage_at_exit", 0.0)),
                     checklist_after=payload.get("selected_checklist") or payload.get("checklist_after"),
                     probability_bucket=payload.get("probability_bucket"),
                     post_trade_capture=payload.get("post_trade_capture"),
                     close_classification=payload.get("close_classification"),
                     notes=payload.get("notes"),
                 )
-                if payload.get("line_snapshot"):
-                    trade.add_line_snapshot(payload["line_snapshot"])
+                line_snapshot = payload.get("line_snapshot")
+                if line_snapshot is not None and isinstance(line_snapshot, dict):
+                    trade.add_line_snapshot(line_snapshot)
                 if self.trade_repository is not None:
                     self.trade_repository.save_trade(trade)
                 trade_found = True
@@ -174,19 +187,24 @@ class TradeListener:
         if not trade_found and self.trade_repository is not None:
             stored_trade = self.trade_repository.get_trade(trade_id)
             if stored_trade is not None:
+                exit_price_val = payload.get("exit_price")
+                if exit_price_val is None or not isinstance(exit_price_val, (int, float)):
+                    raise TradeListenerError("exit_price required and must be numeric")
+
                 stored_trade.close_trade(
-                    exit_price=payload.get("exit_price"),
+                    exit_price=float(exit_price_val),
                     exit_time=payload.get("exit_time"),
-                    exit_reason=payload.get("exit_reason"),
-                    slippage_at_exit=payload.get("slippage_at_exit", 0.0),
+                    exit_reason=str(payload.get("exit_reason", "")),
+                    slippage_at_exit=float(payload.get("slippage_at_exit", 0.0)),
                     checklist_after=payload.get("selected_checklist") or payload.get("checklist_after"),
                     probability_bucket=payload.get("probability_bucket"),
                     post_trade_capture=payload.get("post_trade_capture"),
                     close_classification=payload.get("close_classification"),
                     notes=payload.get("notes"),
                 )
-                if payload.get("line_snapshot"):
-                    stored_trade.add_line_snapshot(payload["line_snapshot"])
+                line_snapshot = payload.get("line_snapshot")
+                if line_snapshot is not None and isinstance(line_snapshot, dict):
+                    stored_trade.add_line_snapshot(line_snapshot)
                 trades.append(stored_trade)
                 self.trade_repository.save_trade(stored_trade)
 
@@ -230,7 +248,7 @@ class TradeListener:
         }
 
     def _handle_position_modified(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(event.get("payload") or {})
+        payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         trade = self._find_trade(payload.get("trade_id"))
         if trade is None:
             return {"status": "trade_not_found", "trade_id": payload.get("trade_id")}
@@ -258,14 +276,19 @@ class TradeListener:
         return {"status": "trade_position_updated", "trade_id": trade.trade_id}
 
     def _handle_scale_in(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(event.get("payload") or {})
+        payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         trade = self._find_trade(payload.get("trade_id"))
         if trade is None:
             return {"status": "trade_not_found", "trade_id": payload.get("trade_id")}
 
+        additional_qty = payload.get("additional_quantity") or payload.get("quantity_delta") or payload.get("quantity")
+        fill = payload.get("fill_price") or payload.get("entry_price")
+        if additional_qty is None or fill is None:
+            return {"status": "invalid_payload", "detail": "additional_quantity and fill_price required"}
+
         trade.scale_in(
-            additional_quantity=payload.get("additional_quantity") or payload.get("quantity_delta") or payload.get("quantity"),
-            fill_price=payload.get("fill_price") or payload.get("entry_price"),
+            additional_quantity=float(additional_qty),
+            fill_price=float(fill),
             fees=payload.get("fees", 0.0),
             commission=payload.get("commission", 0.0),
             swaps=payload.get("swaps", 0.0),
@@ -287,7 +310,7 @@ class TradeListener:
         return {"status": "trade_scaled_in", "trade_id": trade.trade_id}
 
     def _handle_partial_close(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(event.get("payload") or {})
+        payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         trade = self._find_trade(payload.get("trade_id"))
         if trade is None:
             return {"status": "trade_not_found", "trade_id": payload.get("trade_id")}
@@ -295,6 +318,10 @@ class TradeListener:
         closed_quantity = payload.get("closed_quantity") or payload.get("quantity_delta") or payload.get("quantity")
         if closed_quantity is None:
             return {"status": "invalid_payload", "detail": "closed_quantity is required"}
+
+        exit_price_val = payload.get("exit_price")
+        if exit_price_val is None or not isinstance(exit_price_val, (int, float)):
+            return {"status": "invalid_payload", "detail": "exit_price required and must be numeric"}
 
         if float(closed_quantity) >= float(trade.to_dict().get("quantity") or 0):
             return self._handle_trade_closed(
@@ -308,8 +335,8 @@ class TradeListener:
             )
 
         partial_trade = trade.create_partial_close_trade(
-            closed_quantity=closed_quantity,
-            exit_price=payload.get("exit_price"),
+            closed_quantity=float(closed_quantity),
+            exit_price=float(exit_price_val),
             exit_time=payload.get("exit_time"),
             exit_reason=payload.get("exit_reason", "partial_close"),
             slippage_at_exit=payload.get("slippage_at_exit", 0.0),
@@ -342,7 +369,7 @@ class TradeListener:
         }
 
     def _handle_order_cancelled(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        payload = dict(event.get("payload") or {})
+        payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         broker_activity = list(self.context.get_cache("broker_activity") or [])
         broker_activity.append(
             {
@@ -360,6 +387,45 @@ class TradeListener:
             )
         )
         return {"status": "order_cancelled_recorded"}
+
+    # ==========================================================
+    # ACCOUNT STATE
+    # ==========================================================
+
+    def _handle_account_state(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        payload = event.get("payload") or {}
+        account_id = payload.get("account_id")
+        
+        if not account_id or self.account_repository is None:
+            return {"status": "account_not_updated"}
+
+        account = self.account_repository.get(account_id)
+        if not account:
+            return {"status": "account_not_found"}
+
+        metadata = account.to_dict().get("metadata") or {}
+        
+        if "balance" in payload:
+            account._current_balance = float(payload["balance"])
+            account._initial_balance = float(payload["balance"]) # Also update initial_balance for prototype
+        if "equity" in payload:
+            account.update_equity(float(payload["equity"]))
+        if "margin" in payload:
+            metadata["margin"] = float(payload["margin"])
+        if "free_margin" in payload:
+            metadata["free_margin"] = float(payload["free_margin"])
+            
+        account._metadata = metadata
+        self.account_repository.save(account)
+
+        self.event_bus.emit(
+            ExecutionEvent(
+                event_type="ACCOUNT_STATE_UPDATED",
+                timestamp=datetime.now(timezone.utc),
+                metadata=payload,
+            )
+        )
+        return {"status": "account_state_updated", "account_id": account_id}
 
     # ==========================================================
     # STORAGE
@@ -387,7 +453,7 @@ class TradeListener:
         self.context.set_cache("trades", trades)
 
     def _find_trade(self, trade_id: Optional[str]) -> Optional[Trade]:
-        if not trade_id:
+        if trade_id is None or not isinstance(trade_id, str):
             return None
         trades = self.context.get_cache("trades") or []
         for trade in trades:
@@ -425,6 +491,17 @@ class TradeListener:
         prepared.pop(str(client_ticket_id), None)
         self.context.set_cache("prepared_broker_tickets", prepared)
         return merged
+
+    @staticmethod
+    def _normalize_trade_identifier(payload: Dict[str, Any]) -> Dict[str, Any]:
+        trade_id = payload.get("trade_id")
+        if not isinstance(trade_id, str):
+            return payload
+        if trade_id.startswith("mt5_history_"):
+            payload["trade_id"] = "mt5_" + trade_id[len("mt5_history_"):]
+        elif trade_id.startswith("mt5_pos_"):
+            payload["trade_id"] = "mt5_" + trade_id[len("mt5_pos_"):]
+        return payload
 
     # ==========================================================
     # VALIDATION

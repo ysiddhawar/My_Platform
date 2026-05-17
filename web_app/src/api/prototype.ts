@@ -39,7 +39,7 @@ const EMPTY_BEHAVIOR: BehaviorAnalysis = {
   missed_opportunity_intelligence: { features: {}, findings: [], strengths: [] },
 };
 
-function buildDailyReturns(trades: TradeRecord[]): number[] {
+function buildDailyReturns(trades: TradeRecord[], capital: number = 100000): number[] {
   const dailyPnls = new Map<string, number>();
   trades
     .filter((trade) => trade.is_closed)
@@ -51,10 +51,10 @@ function buildDailyReturns(trades: TradeRecord[]): number[] {
 
   return Array.from(dailyPnls.entries())
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([, pnl]) => pnl / 100000);
+    .map(([, pnl]) => pnl / capital);
 }
 
-function buildStrategyMatrix(trades: TradeRecord[]) {
+function buildStrategyMatrix(trades: TradeRecord[], capital: number = 100000) {
   const closed = trades.filter((trade) => trade.is_closed);
   const grouped = new Map<string, Map<string, number>>();
 
@@ -63,7 +63,7 @@ function buildStrategyMatrix(trades: TradeRecord[]) {
     const dayKey = trade.exit_date || trade.entry_date || trade.exit_time?.slice(0, 10) || trade.entry_time?.slice(0, 10);
     if (!dayKey) return;
     const bucket = grouped.get(label) || new Map<string, number>();
-    bucket.set(dayKey, (bucket.get(dayKey) || 0) + Number(trade.net_pnl || 0) / 100000);
+    bucket.set(dayKey, (bucket.get(dayKey) || 0) + Number(trade.net_pnl || 0) / capital);
     grouped.set(label, bucket);
   });
 
@@ -198,7 +198,6 @@ export async function connectMt5FileBridge(payload: Mt5FileBridgeInput): Promise
       broker_id: payload.broker_id,
       inbox_dir: payload.inbox_dir,
       archive_dir: payload.archive_dir,
-      outbox_dir: payload.outbox_dir,
       poll_interval_seconds: payload.poll_interval_seconds ?? 0.25,
     }),
   );
@@ -252,18 +251,14 @@ export async function fetchDashboardChartContracts(payload: {
 export async function validateMt5FileBridge(payload: {
   inbox_dir: string;
   archive_dir?: string;
-  outbox_dir?: string;
 }): Promise<{
   ok: boolean;
   inbox_dir: string;
   archive_dir: string;
-  outbox_dir: string;
   inbox_exists: boolean;
   archive_exists: boolean;
-  outbox_exists: boolean;
   inbox_writable: boolean;
   archive_writable: boolean;
-  outbox_writable: boolean;
   warnings: string[];
   instructions: string[];
 }> {
@@ -316,19 +311,23 @@ export async function fetchCalendarDayDetail(day: string, accountId = DEMO_ACCOU
 export async function fetchAIDiagnosis(accountId = DEMO_ACCOUNT_ID): Promise<AIDiagnosis> {
   const overview = await fetchOverview(accountId);
   const behavior = await fetchBehavior(accountId);
+  const accounts = await fetchAccounts();
+  const account = accounts.find((a) => a.account_id === accountId);
+  const capital = account?.initial_balance ? Number(account.initial_balance) : 100000;
+
   const closedTrades = overview.trades.filter((trade) => trade.is_closed);
-  const strategyMatrix = buildStrategyMatrix(overview.trades);
+  const strategyMatrix = buildStrategyMatrix(overview.trades, capital);
 
   const metricPayload = {
-    returns: buildDailyReturns(overview.trades),
+    returns: buildDailyReturns(overview.trades, capital),
     net_pnl: closedTrades.map((trade) => Number(trade.net_pnl || 0)),
     gross_pnl: closedTrades.map((trade) => Number(trade.gross_pnl || 0)),
     brokerage: closedTrades.map((trade) => Number(trade.commission || 0) + Number(trade.fees || 0)),
     slippage: closedTrades.map((trade) => Number(trade.slippage_cost || 0)),
     swaps: closedTrades.map((trade) => Number(trade.swaps || 0)),
     strategies: Object.keys(strategyMatrix).length ? strategyMatrix : undefined,
-    capital: 100000,
-    total_capital: 100000,
+    capital: capital,
+    total_capital: capital,
     target_volatility: 0.15,
     max_drawdown_threshold: 0.25,
     max_leverage: 3,

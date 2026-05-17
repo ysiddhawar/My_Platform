@@ -204,7 +204,7 @@ class Trade:
         # Behavioral
         self._checklist_before = checklist_before or []
         self._probability_bucket = probability_bucket
-        self._checklist_after = []
+        self._checklist_after: List[str] = []
         self._confidence_score = confidence_score
         self._emotion_tag = emotion_tag
         self._rule_violations_snapshot = rule_violations_snapshot or []
@@ -295,7 +295,7 @@ class Trade:
         self._exit_date = self._exit_time.date()
         self._exit_day_of_week = self._exit_time.strftime("%A")
 
-        self._checklist_after = checklist_after or []
+        self._checklist_after: List[str] = checklist_after or []
         if probability_bucket is not None:
             self._probability_bucket = probability_bucket
         if post_trade_capture:
@@ -368,6 +368,7 @@ class Trade:
         close_classification: Optional[str] = None,
         notes: Optional[str] = None,
     ):
+        coerced_exit_time = self._coerce_datetime(exit_time)
         self.close(
             exit_price=exit_price,
             exit_reason=exit_reason,
@@ -377,7 +378,7 @@ class Trade:
             post_trade_capture=post_trade_capture,
             close_classification=close_classification,
             notes=notes,
-            exit_time=exit_time,
+            exit_time=coerced_exit_time,
         )
 
     def add_line_snapshot(self, snapshot: Dict[str, Any]):
@@ -631,7 +632,19 @@ class Trade:
         if value is None or isinstance(value, datetime):
             return value
         if isinstance(value, str):
-            return datetime.fromisoformat(value)
+            normalized = value.strip()
+            if normalized.endswith("Z"):
+                normalized = normalized[:-1] + "+00:00"
+            try:
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                pass
+            for pattern in ("%Y.%m.%d %H:%M:%S", "%Y.%m.%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    return datetime.strptime(normalized, pattern).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+            raise TradeValidationError(f"Invalid datetime value: {value}")
         raise TradeValidationError("Invalid datetime value")
 
     # =====================================================
