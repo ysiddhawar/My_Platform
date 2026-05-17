@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 from threading import RLock
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 
 from models.strategy import Strategy
@@ -50,7 +50,7 @@ class StrategyRepository:
             )
             self._connection.commit()
 
-    def save_strategy(self, strategy: Strategy) -> Dict[str, object]:
+    def save_strategy(self, strategy: Strategy) -> Dict[str, Any]:
         data = strategy.to_dict()
         with self._lock:
             cursor = self._connection.cursor()
@@ -75,7 +75,7 @@ class StrategyRepository:
             self._connection.commit()
         return data
 
-    def list_strategies(self, active_only: bool = False) -> List[Dict[str, object]]:
+    def list_strategies(self, active_only: bool = False) -> List[Dict[str, Any]]:
         query = "SELECT strategy_json FROM strategies"
         if active_only:
             query += " WHERE is_active = 1"
@@ -84,7 +84,7 @@ class StrategyRepository:
             rows = self._connection.execute(query).fetchall()
         return [json.loads(row[0]) for row in rows]
 
-    def get_strategy(self, name: str) -> Optional[Dict[str, object]]:
+    def get_strategy(self, name: str) -> Optional[Dict[str, Any]]:
         with self._lock:
             row = self._connection.execute(
                 "SELECT strategy_json FROM strategies WHERE name = ?",
@@ -97,7 +97,7 @@ class StrategyRepository:
         strategy_name: str,
         checklist_items: List[str],
         mandatory_items: Optional[List[str]] = None,
-    ) -> Dict[str, object]:
+    ) -> Dict[str, Any]:
         existing = self.get_strategy(strategy_name)
         if not existing:
             raise StrategyRepositoryError("Strategy not found")
@@ -108,8 +108,8 @@ class StrategyRepository:
         )
 
         strategy = Strategy(
-            name=existing["name"],
-            description=existing["description"],
+            name=existing.get("name", "UNNAMED"),
+            description=existing.get("description", ""),
             market_types=existing.get("market_types", []),
             checklist_items=merged_items,
             mandatory_checklist_items=merged_mandatory,

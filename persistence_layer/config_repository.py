@@ -30,9 +30,14 @@ class ConfigRepository:
 
         self._lock = RLock()
         self._db_path = Path(db_path)
-        self._connection = None
+        self._connection: sqlite3.Connection | None = None
 
         self._initialize()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        assert self._connection is not None
+        return self._connection
 
     # ==========================================================
     # INITIALIZATION
@@ -47,14 +52,14 @@ class ConfigRepository:
                 check_same_thread=False,
             )
 
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=FULL;")
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=FULL;")
 
             self._create_schema()
 
     def _create_schema(self):
 
-        cursor = self._connection.cursor()
+        cursor = self._conn.cursor()
 
         # Versioned configs
         cursor.execute("""
@@ -82,7 +87,7 @@ class ConfigRepository:
             ON configs (account_id)
         """)
 
-        self._connection.commit()
+        self._conn.commit()
 
     # ==========================================================
     # CREATE NEW CONFIG VERSION
@@ -102,7 +107,7 @@ class ConfigRepository:
         with self._lock:
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT INTO configs (
@@ -121,12 +126,12 @@ class ConfigRepository:
                     timestamp,
                 ))
 
-                version = cursor.lastrowid
-                self._connection.commit()
+                version = cursor.lastrowid or 0
+                self._conn.commit()
                 return version
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise ConfigRepositoryError(str(e))
 
     # ==========================================================
@@ -143,7 +148,7 @@ class ConfigRepository:
         with self._lock:
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT OR REPLACE INTO active_config (
@@ -158,10 +163,10 @@ class ConfigRepository:
                     timestamp,
                 ))
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise ConfigRepositoryError(str(e))
 
     # ==========================================================
@@ -174,7 +179,7 @@ class ConfigRepository:
     ) -> Optional[Dict[str, Any]]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
 
             cursor.execute("""
                 SELECT c.config_json
@@ -201,7 +206,7 @@ class ConfigRepository:
     ) -> List[Dict[str, Any]]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("""
                 SELECT config_version, config_json, source, created_at
                 FROM configs
@@ -234,7 +239,7 @@ class ConfigRepository:
 
         with self._lock:
 
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
 
             cursor.execute("""
                 SELECT config_version
@@ -259,7 +264,7 @@ class ConfigRepository:
                 timestamp,
             ))
 
-            self._connection.commit()
+            self._conn.commit()
 
     # ==========================================================
     # MAINTENANCE
@@ -269,5 +274,5 @@ class ConfigRepository:
 
         with self._lock:
             if self._connection:
-                self._connection.close()
+                self._conn.close()
                 self._connection = None

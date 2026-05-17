@@ -31,9 +31,14 @@ class DiagnosisRepository:
 
         self._lock = RLock()
         self._db_path = Path(db_path)
-        self._connection = None
+        self._connection: sqlite3.Connection | None = None
 
         self._initialize()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        assert self._connection is not None
+        return self._connection
 
     # ==========================================================
     # INITIALIZATION
@@ -48,14 +53,14 @@ class DiagnosisRepository:
                 check_same_thread=False,
             )
 
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=FULL;")
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=FULL;")
 
             self._create_schema()
 
     def _create_schema(self):
 
-        cursor = self._connection.cursor()
+        cursor = self._conn.cursor()
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS diagnoses (
@@ -81,7 +86,7 @@ class DiagnosisRepository:
             ON diagnoses (created_at)
         """)
 
-        self._connection.commit()
+        self._conn.commit()
 
     # ==========================================================
     # SAVE / UPSERT
@@ -97,7 +102,7 @@ class DiagnosisRepository:
             payload = self._serialize(diagnosis)
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT OR REPLACE INTO diagnoses (
@@ -114,10 +119,10 @@ class DiagnosisRepository:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, payload)
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise DiagnosisRepositoryError(str(e))
 
     # ==========================================================
@@ -127,7 +132,7 @@ class DiagnosisRepository:
     def get(self, diagnosis_id: str) -> Optional[AIDiagnosis]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 "SELECT * FROM diagnoses WHERE diagnosis_id = ?",
                 (diagnosis_id,),
@@ -155,7 +160,7 @@ class DiagnosisRepository:
             query += f" LIMIT {int(limit)}"
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(query, (account_id,))
             rows = cursor.fetchall()
 
@@ -218,5 +223,5 @@ class DiagnosisRepository:
 
         with self._lock:
             if self._connection:
-                self._connection.close()
-                self._connection = None
+                self._conn.close()
+                self._connection: sqlite3.Connection | None = None

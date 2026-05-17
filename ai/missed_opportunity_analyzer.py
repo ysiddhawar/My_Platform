@@ -146,9 +146,11 @@ class MissedOpportunityAnalyzer:
                 if session.get("account_id") != account_id:
                     continue
                 opened_at = self._coerce_datetime(session.get("opened_at"))
-                closed_at = self._coerce_datetime(session.get("closed_at")) or opened_at
                 if opened_at is None:
                     continue
+                closed_at = self._coerce_datetime(session.get("closed_at"))
+                if closed_at is None:
+                    closed_at = opened_at
                 if opened_at <= observed_at <= closed_at:
                     is_open = True
                     break

@@ -32,9 +32,14 @@ class TradeRepository:
 
         self._lock = RLock()
         self._db_path = Path(db_path)
-        self._connection = None
+        self._connection: sqlite3.Connection | None = None
 
         self._initialize()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        assert self._connection is not None
+        return self._connection
 
     # ==========================================================
     # INITIALIZATION
@@ -49,14 +54,14 @@ class TradeRepository:
                 check_same_thread=False,
             )
 
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=FULL;")
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=FULL;")
 
             self._create_schema()
 
     def _create_schema(self):
 
-        cursor = self._connection.cursor()
+        cursor = self._conn.cursor()
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS trades (
@@ -92,7 +97,7 @@ class TradeRepository:
             ON trades (is_closed)
         """)
 
-        self._connection.commit()
+        self._conn.commit()
 
     # ==========================================================
     # UPSERT TRADE
@@ -108,7 +113,7 @@ class TradeRepository:
             serialized = self._serialize_trade(trade)
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT OR REPLACE INTO trades (
@@ -130,10 +135,10 @@ class TradeRepository:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, serialized)
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise TradeRepositoryError(str(e))
 
     # ==========================================================
@@ -143,7 +148,7 @@ class TradeRepository:
     def get_trade(self, trade_id: str) -> Optional[Trade]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 "SELECT * FROM trades WHERE trade_id = ?",
                 (trade_id,),
@@ -172,7 +177,7 @@ class TradeRepository:
         query += " ORDER BY created_at ASC"
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(query, params)
             rows = cursor.fetchall()
 
@@ -185,7 +190,7 @@ class TradeRepository:
     ) -> List[Trade]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("""
                 SELECT * FROM trades
                 WHERE account_id = ?
@@ -199,10 +204,10 @@ class TradeRepository:
 
     def delete_by_account(self, account_id: str) -> int:
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("DELETE FROM trades WHERE account_id = ?", (account_id,))
             deleted = cursor.rowcount
-            self._connection.commit()
+            self._conn.commit()
         return deleted
 
     # ==========================================================
@@ -337,5 +342,5 @@ class TradeRepository:
 
         with self._lock:
             if self._connection:
-                self._connection.close()
-                self._connection = None
+                self._conn.close()
+                self._connection: sqlite3.Connection | None = None

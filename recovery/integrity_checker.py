@@ -47,7 +47,7 @@ class IntegrityChecker:
         # ------------------------------------------------------
 
         if events:
-            seq_numbers = [e.get("sequence") for e in events if "sequence" in e]
+            seq_numbers: list[int] = [e["sequence"] for e in events if "sequence" in e]
 
             if not seq_numbers:
                 errors.append("Events missing sequence field")

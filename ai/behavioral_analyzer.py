@@ -69,8 +69,8 @@ class BehavioralAnalyzer:
             ]
             normalized_opportunities = [
                 opportunity for opportunity in normalized_opportunities
-                if self._coerce_timestamp(opportunity.get("observed_at")) is not None
-                and self._coerce_timestamp(opportunity.get("observed_at")) >= cutoff
+                if (observed_at := self._coerce_timestamp(opportunity.get("observed_at"))) is not None
+                and observed_at >= cutoff
             ]
 
         time_intelligence = self._time_pattern_analyzer.analyze(
@@ -234,7 +234,7 @@ class BehavioralAnalyzer:
         percentiles = {}
         for key, value in signals.items():
             historical = [
-                t.get(key)
+                t[key]
                 for t in trades
                 if key in t and isinstance(t.get(key), (int, float))
             ]
@@ -252,7 +252,7 @@ class BehavioralAnalyzer:
         zscores = {}
         for key, value in signals.items():
             historical = [
-                t.get(key)
+                t[key]
                 for t in trades
                 if key in t and isinstance(t.get(key), (int, float))
             ]
@@ -288,10 +288,9 @@ class BehavioralAnalyzer:
 
     def _derive_cutoff(self, trades: List[Dict[str, Any]]) -> Optional[datetime]:
         timestamps = [
-            self._coerce_timestamp(trade.get("entry_time"))
-            for trade in trades
+            ts for trade in trades
+            if (ts := self._coerce_timestamp(trade.get("entry_time"))) is not None
         ]
-        timestamps = [timestamp for timestamp in timestamps if timestamp is not None]
         if not timestamps:
             return None
         return min(timestamps)

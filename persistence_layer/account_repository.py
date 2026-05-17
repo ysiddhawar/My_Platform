@@ -33,9 +33,14 @@ class AccountRepository:
 
         self._lock = RLock()
         self._db_path = Path(db_path)
-        self._connection = None
+        self._connection: sqlite3.Connection | None = None
 
         self._initialize()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        assert self._connection is not None
+        return self._connection
 
     # ==========================================================
     # INITIALIZATION
@@ -50,14 +55,14 @@ class AccountRepository:
                 check_same_thread=False,
             )
 
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=FULL;")
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=FULL;")
 
             self._create_schema()
 
     def _create_schema(self):
 
-        cursor = self._connection.cursor()
+        cursor = self._conn.cursor()
 
         # Core account table
         cursor.execute("""
@@ -88,7 +93,7 @@ class AccountRepository:
             ON capital_history (account_id)
         """)
 
-        self._connection.commit()
+        self._conn.commit()
 
     # ==========================================================
     # UPSERT ACCOUNT
@@ -113,7 +118,7 @@ class AccountRepository:
             )
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT OR REPLACE INTO accounts (
@@ -127,10 +132,10 @@ class AccountRepository:
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, payload)
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise AccountRepositoryError(str(e))
 
     # ==========================================================
@@ -140,7 +145,7 @@ class AccountRepository:
     def get(self, account_id: str) -> Optional[Account]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 "SELECT account_data_json FROM accounts WHERE account_id = ?",
                 (account_id,),
@@ -156,7 +161,7 @@ class AccountRepository:
     def get_all_accounts(self) -> List[Account]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("SELECT account_data_json FROM accounts")
             rows = cursor.fetchall()
 
@@ -178,7 +183,7 @@ class AccountRepository:
         with self._lock:
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT INTO capital_history (
@@ -197,10 +202,10 @@ class AccountRepository:
                     timestamp
                 ))
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise AccountRepositoryError(str(e))
 
     def get_capital_history(
@@ -209,7 +214,7 @@ class AccountRepository:
     ) -> List[Dict[str, Any]]:
 
         with self._lock:
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("""
                 SELECT equity, balance, drawdown, timestamp
                 FROM capital_history
@@ -241,7 +246,7 @@ class AccountRepository:
 
         with self._lock:
 
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
 
             cursor.execute("""
                 UPDATE accounts
@@ -250,7 +255,7 @@ class AccountRepository:
                 WHERE account_id = ?
             """, (new_tier, timestamp, account_id))
 
-            self._connection.commit()
+            self._conn.commit()
 
     # ==========================================================
     # MAINTENANCE
@@ -260,5 +265,5 @@ class AccountRepository:
 
         with self._lock:
             if self._connection:
-                self._connection.close()
-                self._connection = None
+                self._conn.close()
+                self._connection: sqlite3.Connection | None = None

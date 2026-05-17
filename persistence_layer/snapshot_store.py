@@ -31,8 +31,13 @@ class SnapshotStore:
 
         self._lock = RLock()
         self._db_path = Path(db_path)
-        self._connection = None
+        self._connection: sqlite3.Connection | None = None
         self._initialize()
+
+    @property
+    def _conn(self) -> sqlite3.Connection:
+        assert self._connection is not None
+        return self._connection
 
     # ==========================================================
     # INITIALIZATION
@@ -47,14 +52,14 @@ class SnapshotStore:
                 check_same_thread=False,
             )
 
-            self._connection.execute("PRAGMA journal_mode=WAL;")
-            self._connection.execute("PRAGMA synchronous=FULL;")
+            self._conn.execute("PRAGMA journal_mode=WAL;")
+            self._conn.execute("PRAGMA synchronous=FULL;")
 
             self._create_schema()
 
     def _create_schema(self):
 
-        cursor = self._connection.cursor()
+        cursor = self._conn.cursor()
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS snapshots (
@@ -65,7 +70,7 @@ class SnapshotStore:
             )
         """)
 
-        self._connection.commit()
+        self._conn.commit()
 
     # ==========================================================
     # SAVE SNAPSHOT
@@ -89,7 +94,7 @@ class SnapshotStore:
             serialized = self._serialize_context(context)
 
             try:
-                cursor = self._connection.cursor()
+                cursor = self._conn.cursor()
 
                 cursor.execute("""
                     INSERT OR REPLACE INTO snapshots (
@@ -106,10 +111,10 @@ class SnapshotStore:
                     datetime.now(timezone.utc).isoformat(),
                 ))
 
-                self._connection.commit()
+                self._conn.commit()
 
             except sqlite3.Error as e:
-                self._connection.rollback()
+                self._conn.rollback()
                 raise SnapshotStoreError(str(e))
 
     # ==========================================================
@@ -123,7 +128,7 @@ class SnapshotStore:
 
         with self._lock:
 
-            cursor = self._connection.cursor()
+            cursor = self._conn.cursor()
 
             cursor.execute("""
                 SELECT sequence_id, snapshot_data
@@ -199,5 +204,5 @@ class SnapshotStore:
 
         with self._lock:
             if self._connection:
-                self._connection.close()
-                self._connection = None
+                self._conn.close()
+                self._connection: sqlite3.Connection | None = None
