@@ -58,6 +58,7 @@ export type Mt5FileBridgeInput = {
   inbox_dir: string;
   archive_dir?: string;
   poll_interval_seconds?: number;
+  source_account_id?: string;
 };
 
 export type WorkspaceLayout = {

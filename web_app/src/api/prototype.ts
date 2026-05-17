@@ -199,6 +199,7 @@ export async function connectMt5FileBridge(payload: Mt5FileBridgeInput): Promise
       inbox_dir: payload.inbox_dir,
       archive_dir: payload.archive_dir,
       poll_interval_seconds: payload.poll_interval_seconds ?? 0.25,
+      source_account_id: payload.source_account_id,
     }),
   );
   return (response.data || {}) as AccountIntegration;

@@ -62,6 +62,7 @@ export function AccountPickerModal({
     inbox_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Inbox',
     archive_dir: '~/AppData/Roaming/MetaQuotes/Terminal/Common/Files/MyPlatform_Archive',
     poll_interval_seconds: '0.25',
+    source_account_id: '',
   });
   const [mt5Validation, setMt5Validation] = useState<{
     ok: boolean;
@@ -272,12 +273,20 @@ export function AccountPickerModal({
                     <Input label="MT5 Archive Directory" value={mt5Config.archive_dir} onChange={(value) => setMt5Config((current) => ({ ...current, archive_dir: value }))} />
                   </div>
                 </div>
-                <Input
-                  label="Poll Interval Seconds"
-                  value={mt5Config.poll_interval_seconds}
-                  onChange={(value) => setMt5Config((current) => ({ ...current, poll_interval_seconds: value }))}
-                  type="number"
-                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Input
+                    label="Poll Interval Seconds"
+                    value={mt5Config.poll_interval_seconds}
+                    onChange={(value) => setMt5Config((current) => ({ ...current, poll_interval_seconds: value }))}
+                    type="number"
+                  />
+                  <Input
+                    label="MT5 Account Login Number (source_account_id)"
+                    value={mt5Config.source_account_id}
+                    onChange={(value) => setMt5Config((current) => ({ ...current, source_account_id: value }))}
+                    placeholder="e.g. 12345678"
+                  />
+                </div>
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
@@ -355,6 +364,7 @@ export function AccountPickerModal({
                         inbox_dir: mt5Config.inbox_dir,
                         archive_dir: mt5Config.archive_dir || undefined,
                         poll_interval_seconds: Number(mt5Config.poll_interval_seconds || 0.25),
+                        source_account_id: mt5Config.source_account_id || undefined,
                       });
                     }
                     setMode('browse');
@@ -390,11 +400,13 @@ function Input({
   value,
   onChange,
   type = 'text',
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -403,6 +415,7 @@ function Input({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
         className="w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm font-medium text-black outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white"
       />
     </label>
