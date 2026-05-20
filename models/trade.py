@@ -262,7 +262,7 @@ class Trade:
         self._rrr_at_entry = None
         if self._stop_loss_at_entry is not None:
             risk_per_unit = abs(self._entry_price - self._stop_loss_at_entry)
-            self._risk_amount = risk_per_unit * self._quantity
+            self._risk_amount = risk_per_unit * self._quantity * self._lot_size * self._contract_size
 
         if self._stop_loss_at_entry and self._target_at_entry:
             reward = abs(self._target_at_entry - self._entry_price)
