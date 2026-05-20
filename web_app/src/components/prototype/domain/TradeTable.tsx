@@ -106,7 +106,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   </Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.risk_amount || 0))}</Cell>
                   <Cell selected={isSelected}>{formatRatio(Number(trade.rrr_at_entry || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.r_multiple || 0))}</Cell>
+                  <Cell selected={isSelected}>{formatRatio(Number(trade.r_multiple || 0))}</Cell>
                   <Cell selected={isSelected}>{trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—'}</Cell>
                   <Cell selected={isSelected}>{trade.emotion_tag || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.probability_bucket || '—'}</Cell>

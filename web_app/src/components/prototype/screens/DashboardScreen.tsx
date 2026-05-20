@@ -17,7 +17,7 @@ import { DollarSignIcon, TrophyIcon, TrendingUpIcon, TrendingDownIcon, PercentIc
 import { getMetricIcon } from '@/components/prototype/MetricVisualMapping';
 import type { DashboardChartContract, OverviewData, TradeRecord } from '@/types/prototype';
 import { defaultDashboardFilters, defaultDashboardGroupOrder, usePrototypeStore } from '@/state/prototypeStore';
-import { formatCompactNumber, formatCurrency, formatDate, formatMinutes, formatNumber, formatPercent, humanizeKey } from '@/utils/format';
+import { formatCompactNumber, formatCurrency, formatDate, formatMinutes, formatNumber, formatPercent, formatRatio, humanizeKey } from '@/utils/format';
 
 type MetricSection = {
   title: string;
@@ -2080,7 +2080,7 @@ export function DashboardScreen() {
     platform_time: { value: formatMinutes(metrics.totalMinutes) },
     missed_opportunities: { value: String(metrics.missedCount) },
     expectancy: { value: formatCurrency(metrics.expectancy) },
-    profit_factor: { value: formatNumber(metrics.profitFactor) },
+    profit_factor: { value: formatRatio(metrics.profitFactor) },
     avg_win: { value: formatCurrency(metrics.avgWin), tone: metrics.avgWin > 0 ? 'success' as const : 'default' as const },
     avg_loss: { value: formatCurrency(metrics.avgLoss) },
     avg_win_hold: { value: formatMinutes(metrics.avgWinHoldMinutes) },
@@ -2089,7 +2089,7 @@ export function DashboardScreen() {
     top_loss: { value: formatCurrency(metrics.topLoss) },
     win_streak: { value: String(metrics.winStreak) },
     loss_streak: { value: String(metrics.lossStreak) },
-    payoff_ratio: { value: formatNumber(metrics.payoffRatio), tone: metrics.payoffRatio >= 1 ? 'accent' as const : 'default' as const },
+    payoff_ratio: { value: formatRatio(metrics.payoffRatio), tone: metrics.payoffRatio >= 1 ? 'accent' as const : 'default' as const },
     avg_daily_volume: { value: formatCompactNumber(metrics.avgDailyVolume) },
     avg_size: { value: formatCompactNumber(metrics.avgSize) },
     pre_trade_coverage: { value: formatPercent(metrics.preTradeCoverage) },
@@ -2134,11 +2134,11 @@ export function DashboardScreen() {
           key: 'profit_factor',
           icon: <RatioIcon />,
           title: 'Profit Factor',
-          value: formatNumber(metrics.profitFactor),
+          value: formatRatio(metrics.profitFactor),
           tone: metrics.profitFactor >= 1.5 ? 'good' as const : metrics.profitFactor >= 1 ? 'caution' as const : 'risk' as const,
           trend: {
             direction: metrics.profitFactor >= 1 ? 'up' as const : 'down' as const,
-            value: formatNumber(metrics.profitFactor),
+            value: formatRatio(metrics.profitFactor),
             label: 'profit ratio',
           },
         }
@@ -2258,11 +2258,11 @@ export function DashboardScreen() {
           key: 'payoff_ratio',
           icon: <RatioIcon />,
           title: 'Payoff Ratio',
-          value: formatNumber(metrics.payoffRatio),
+          value: formatRatio(metrics.payoffRatio),
           tone: metrics.payoffRatio >= 1.25 ? 'good' as const : metrics.payoffRatio >= 1 ? 'caution' as const : 'risk' as const,
           trend: {
             direction: metrics.payoffRatio >= 1 ? 'up' as const : 'down' as const,
-            value: formatNumber(metrics.payoffRatio),
+            value: formatRatio(metrics.payoffRatio),
             label: 'winner vs loser',
           },
         }

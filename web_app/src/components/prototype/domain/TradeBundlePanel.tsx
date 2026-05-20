@@ -1,5 +1,5 @@
 import type { TradeBundle } from '@/types/prototype';
-import { asArray, asRecord, formatCurrency, formatDate, formatDateTime, formatNumber } from '@/utils/format';
+import { asArray, asRecord, formatCurrency, formatDate, formatDateTime, formatNumber, formatRatio } from '@/utils/format';
 
 type TradeBundlePanelProps = {
   bundle: TradeBundle;
@@ -93,8 +93,8 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
                 ['Gross PnL', formatCurrency(Number(trade.gross_pnl || 0))],
                 ['Net PnL', formatCurrency(Number(trade.net_pnl || 0))],
                 ['Risk Amount', formatCurrency(Number(trade.risk_amount || 0))],
-                ['Risk Reward Ratio', formatNumber(Number(trade.rrr_at_entry || 0))],
-                ['R Multiple', formatNumber(Number(trade.r_multiple || 0))],
+                ['Risk Reward Ratio', formatRatio(Number(trade.rrr_at_entry || 0))],
+                ['R Multiple', formatRatio(Number(trade.r_multiple || 0))],
               ]}
             />
           </Group>
