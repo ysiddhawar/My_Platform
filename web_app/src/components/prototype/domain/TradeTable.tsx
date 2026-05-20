@@ -12,7 +12,7 @@ const headers = [
   'Symbol',
   'Market',
   'Side',
-  'Strategy Tag',
+  'SETUP',
   'Entry Price',
   'Entry Time',
   'Entry Date',
@@ -80,7 +80,11 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
                   <Cell selected={isSelected}>{trade.market_type || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.side}</Cell>
-                  <Cell selected={isSelected}>{trade.strategy_tag || trade.strategy || '—'}</Cell>
+                  <Cell selected={isSelected}>{(() => {
+                      const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null;
+                      const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null;
+                      return tag || strat || '—';
+                    })()}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.entry_price || 0))}</Cell>
                   <Cell selected={isSelected}>{formatTime(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{formatDate(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>

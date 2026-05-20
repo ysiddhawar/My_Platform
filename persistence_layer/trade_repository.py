@@ -241,6 +241,58 @@ class TradeRepository:
             trade_dict.get("updated_at"),
         )
 
+    @staticmethod
+    def _compute_exit_reason(
+        exit_price: Optional[float],
+        stop_loss: Optional[float],
+        target: Optional[float],
+        side: Optional[str],
+        is_closed: bool,
+    ) -> Optional[str]:
+        """
+        Determine exit reason based on price action relative to target and stop-loss.
+        Returns one of: 'Reached Target', 'Hit Stop-loss', 'Manual Exit', or None.
+        """
+        if not is_closed or exit_price is None or stop_loss is None or target is None:
+            return None
+
+        side_lower = side.lower() if side else 'buy'
+
+        if side_lower in ('buy', 'long'):
+            if exit_price >= target:
+                return 'Reached Target'
+            elif exit_price <= stop_loss:
+                return 'Hit Stop-loss'
+            else:
+                return 'Manual Exit'
+        else:  # sell / short
+            if exit_price <= target:
+                return 'Reached Target'
+            elif exit_price >= stop_loss:
+                return 'Hit Stop-loss'
+            else:
+                return 'Manual Exit'
+
+    @staticmethod
+    def _compute_status(
+        net_pnl: Optional[float],
+        is_closed: bool,
+    ) -> Optional[str]:
+        """
+        Determine trade status: 'WIN', 'LOSS', 'BREAK EVEN', or 'OPEN'.
+        Only 'OPEN' is returned for open trades; closed trades use net_pnl.
+        """
+        if not is_closed:
+            return 'OPEN'
+        if net_pnl is None:
+            return None
+        if net_pnl > 0:
+            return 'WIN'
+        elif net_pnl < 0:
+            return 'LOSS'
+        else:
+            return 'BREAK EVEN'
+
     def _deserialize_trade(self, row):
 
         columns = [
@@ -276,13 +328,26 @@ class TradeRepository:
         environment = environment or {}
         system = system or {}
 
+        is_closed = bool(record["is_closed"])
+        side = record["side"]
+        exit_price = exit_details.get("exit_price")
+        stop_loss = entry_details.get("stop_loss_at_entry")
+        target = entry_details.get("target_at_entry")
+        net_pnl = economics.get("net_pnl")
+
+        # Compute derived fields (override raw DB values)
+        computed_exit_reason = self._compute_exit_reason(
+            exit_price, stop_loss, target, side, is_closed
+        )
+        computed_status = self._compute_status(net_pnl, is_closed)
+
         trade_data = {
             "trade_id": record["trade_id"],
             "account_id": record["account_id"],
             "symbol": record["symbol"],
             "market_type": record["market_type"],
-            "side": record["side"],
-            "is_closed": bool(record["is_closed"]),
+            "side": side,
+            "is_closed": is_closed,
             "broker_id": system.get("metadata", {}).get("broker_id", "BROKER"),
             "strategy": system.get("metadata", {}).get("strategy_tag")
             or behavioral.get("pre_trade_capture", {}).get("strategy_name")
@@ -293,20 +358,20 @@ class TradeRepository:
             or "",
             "entry_price": entry_details.get("entry_price", 0.0),
             "entry_time": entry_details.get("entry_time") or record["created_at"],
-            "stop_loss_at_entry": entry_details.get("stop_loss_at_entry"),
-            "target_at_entry": entry_details.get("target_at_entry"),
+            "stop_loss_at_entry": stop_loss,
+            "target_at_entry": target,
             "quantity": entry_details.get("quantity", 0.0),
             "lot_size": entry_details.get("lot_size", 1.0),
             "contract_size": entry_details.get("contract_size", 1.0),
             "leverage_used": entry_details.get("leverage_used", 1.0),
             "minimum_target_price": entry_details.get("minimum_target_price"),
-            "exit_price": exit_details.get("exit_price"),
+            "exit_price": exit_price,
             "exit_time": exit_details.get("exit_time") or record["updated_at"],
-            "exit_reason": exit_details.get("exit_reason"),
-            "close_classification": exit_details.get("close_classification"),
+            "exit_reason": computed_exit_reason or exit_details.get("exit_reason"),
+            "close_classification": computed_status or exit_details.get("close_classification"),
             "closed_before_plan": exit_details.get("closed_before_plan", False),
             "gross_pnl": economics.get("gross_pnl"),
-            "net_pnl": economics.get("net_pnl"),
+            "net_pnl": net_pnl,
             "fees": economics.get("fees", 0.0),
             "commission": economics.get("commission", 0.0),
             "swaps": economics.get("swaps", 0.0),
