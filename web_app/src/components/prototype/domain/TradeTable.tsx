@@ -1,5 +1,5 @@
 import type { TradeRecord } from '@/types/prototype';
-import { formatCurrency, formatDate, formatDateTime, formatNumber, formatTime } from '@/utils/format';
+import { formatCurrency, formatDate, formatNumber, formatTime } from '@/utils/format';
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -13,14 +13,10 @@ const headers = [
   'Market',
   'Side',
   'Strategy Tag',
-  'Setup',
   'Entry Price',
   'Entry Time',
   'Entry Date',
   'Entry Day',
-  'Entry TZ',
-  'Spread',
-  'Entry Slippage',
   'Stop Loss',
   'Target',
   'Exit Price',
@@ -28,11 +24,7 @@ const headers = [
   'Exit Date',
   'Exit Day',
   'Exit Reason',
-  'Exit Slippage',
   'Quantity',
-  'Lot Size',
-  'Leverage',
-  'Fees',
   'Commission',
   'Swaps',
   'Slippage Cost',
@@ -84,19 +76,15 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   }}
                   className={`cursor-pointer transition duration-200 hover:shadow-[inset_0_0_0_1px_rgba(255,89,0,0.72)] ${isSelected ? 'bg-black text-white dark:bg-[#12142b]' : rowTone}`}
                 >
-                  <Cell selected={isSelected}>{trade.trade_id ? trade.trade_id.slice(0, 8) : '—'}</Cell>
+                  <Cell selected={isSelected}>{trade.trade_id ? trade.trade_id.replace(/^mt5_/, '') : '—'}</Cell>
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
                   <Cell selected={isSelected}>{trade.market_type || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.side}</Cell>
                   <Cell selected={isSelected}>{trade.strategy_tag || trade.strategy || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.setup_name || '—'}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.entry_price || 0))}</Cell>
                   <Cell selected={isSelected}>{formatTime(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{formatDate(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{trade.entry_day_of_week || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.entry_timezone || '—'}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.entry_spread || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.slippage_at_entry || 0))}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.stop_loss_at_entry || 0))}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.target_at_entry || 0))}</Cell>
                   <Cell selected={isSelected}>{trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—'}</Cell>
@@ -104,11 +92,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   <Cell selected={isSelected}>{formatDate(trade.exit_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{trade.exit_day_of_week || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.exit_reason || '—'}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.slippage_at_exit || 0))}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.quantity || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.lot_size || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.leverage_used || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.fees || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.commission || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.swaps || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.slippage_cost || 0))}</Cell>
