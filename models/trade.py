@@ -67,6 +67,7 @@ class Trade:
         # Trade Economics
         "_quantity",
         "_lot_size",
+        "_contract_size",
         "_leverage_used",
         "_fees",
         "_commission",
@@ -123,6 +124,7 @@ class Trade:
         quantity: float,
         lot_size: float,
         leverage_used: float,
+        contract_size: float = 1.0,
         stop_loss_at_entry: Optional[float] = None,
         target_at_entry: Optional[float] = None,
         entry_spread: float = 0.0,
@@ -163,13 +165,14 @@ class Trade:
         self._side = self._validate_side(side)
 
         # Strategy
-        self._strategy_tag = self._validate_non_empty(strategy_tag, "strategy_tag")
-        self._setup_name = self._validate_non_empty(setup_name, "setup_name")
+        self._strategy_tag = strategy_tag.strip() if isinstance(strategy_tag, str) else ""
+        self._setup_name = setup_name.strip() if isinstance(setup_name, str) else ""
 
         # Entry
         self._entry_price = self._validate_positive(entry_price, "entry_price")
         self._quantity = self._validate_positive(quantity, "quantity")
         self._lot_size = self._validate_positive(lot_size, "lot_size")
+        self._contract_size = self._validate_positive(contract_size, "contract_size")
         self._leverage_used = self._validate_positive(leverage_used, "leverage_used")
 
         self._entry_time = entry_time or datetime.now(timezone.utc)
@@ -318,19 +321,14 @@ class Trade:
 
         direction = 1 if self._side == "buy" else -1
         self._gross_pnl = direction * (
-            (self._exit_price - self._entry_price) * self._quantity
+            (self._exit_price - self._entry_price) * self._quantity * self._lot_size * self._contract_size
         )
 
+        # MT5 DEAL_PROFIT = price_pnl + commission + swaps
+        # where commission and swaps are negative for costs.
+        # The fill prices already embed any slippage, so no separate slippage deduction.
         self._slippage_cost = self._slippage_at_entry + self._slippage_at_exit
-
-        total_cost = (
-            self._fees +
-            self._commission +
-            self._swaps +
-            self._slippage_cost
-        )
-
-        self._net_pnl = self._gross_pnl - total_cost
+        self._net_pnl = self._gross_pnl + self._commission + self._swaps
 
     def _compute_r_multiple(self):
         if self._risk_amount and self._risk_amount != 0:
@@ -573,11 +571,12 @@ class Trade:
             symbol=payload["symbol"],
             market_type=payload.get("market_type", "stock"),
             side=payload["side"],
-            strategy_tag=payload.get("strategy_tag") or payload.get("strategy") or payload.get("setup_name") or "UNSPECIFIED",
-            setup_name=payload.get("setup_name") or payload.get("strategy_tag") or payload.get("strategy") or "UNSPECIFIED",
+            strategy_tag=payload.get("strategy_tag") or payload.get("strategy") or "",
+            setup_name=payload.get("setup_name") or "",
             entry_price=payload["entry_price"],
             quantity=payload["quantity"],
             lot_size=payload.get("lot_size", 1.0),
+            contract_size=payload.get("contract_size", 1.0),
             leverage_used=payload.get("leverage_used", 1.0),
             stop_loss_at_entry=payload.get("stop_loss_at_entry"),
             target_at_entry=payload.get("target_at_entry"),
@@ -742,6 +741,7 @@ class Trade:
                 "target_at_entry": self._target_at_entry,
                 "quantity": self._quantity,
                 "lot_size": self._lot_size,
+                "contract_size": self._contract_size,
                 "leverage_used": self._leverage_used,
                 "minimum_target_price": self._minimum_target_price,
             },

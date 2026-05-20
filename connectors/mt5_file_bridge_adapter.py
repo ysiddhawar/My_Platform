@@ -50,13 +50,21 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
     def _disconnect_impl(self):
         return None
 
-    def _poll_event(self) -> Optional[Dict[str, Any]]:
-        for path in sorted(
-            self._inbox_dir.glob("*.json"),
-            key=lambda candidate: (candidate.stat().st_mtime, candidate.name),
-        ):
-            if not path.is_file():
+    def _snapshot_json_files(self, directory: Path) -> list[tuple[Path, float]]:
+        if not directory.exists():
+            return []
+        files: list[tuple[Path, float]] = []
+        for path in directory.glob("*.json"):
+            try:
+                if not path.is_file():
+                    continue
+                files.append((path, path.stat().st_mtime))
+            except OSError:
                 continue
+        return sorted(files, key=lambda item: (item[1], item[0].name))
+
+    def _poll_event(self) -> Optional[Dict[str, Any]]:
+        for path, _mtime in self._snapshot_json_files(self._inbox_dir):
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
                 archived_path = self._archive_dir / path.name
@@ -65,11 +73,13 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
                 self._last_event_type = str(payload.get("event_type") or payload.get("type") or "unknown")
                 self._last_event_file = path.name
                 return payload
+            except FileNotFoundError:
+                continue
             except Exception:
                 failed_path = self._archive_dir / f"failed_{int(time.time() * 1000)}_{path.name}"
                 try:
                     shutil.move(str(path), str(failed_path))
-                except Exception:
+                except (FileNotFoundError, OSError):
                     pass
         time.sleep(self._poll_interval_seconds)
         return None
@@ -164,10 +174,10 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
         return {"overall": "PASS" if passed else "FAIL", "steps": steps}
 
     def get_health_snapshot(self) -> Dict[str, Any]:
-        inbox_files = sorted(self._inbox_dir.glob("*.json")) if self._inbox_dir.exists() else []
-        archive_files = sorted(self._archive_dir.glob("*.json")) if self._archive_dir.exists() else []
-        newest_inbox = max((path.stat().st_mtime for path in inbox_files), default=None)
-        newest_archive = max((path.stat().st_mtime for path in archive_files), default=None)
+        inbox_files = self._snapshot_json_files(self._inbox_dir)
+        archive_files = self._snapshot_json_files(self._archive_dir)
+        newest_inbox = max((mtime for _path, mtime in inbox_files), default=None)
+        newest_archive = max((mtime for _path, mtime in archive_files), default=None)
         return {
             "connected": self.is_connected(),
             "status": "connected" if self.is_connected() else "disconnected",

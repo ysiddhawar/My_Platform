@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from api.auth.router import router as auth_router
 from api.accounts.router import router as accounts_router
+from api.debug.router import router as debug_router
 from api.trade_ingestion.router import router as trade_ingestion_router
 from api.metric_computation.router import router as metric_computation_router
 from api.ai_diagnostic.router import router as ai_diagnostic_router
@@ -55,4 +56,5 @@ api_router.include_router(dashboard_layouts_router)
 api_router.include_router(calendar_router)
 api_router.include_router(trading_sessions_router)
 api_router.include_router(missed_opportunities_router)
+api_router.include_router(debug_router)
 api_router.include_router(share_export_router)

@@ -287,16 +287,17 @@ class TradeRepository:
             "strategy": system.get("metadata", {}).get("strategy_tag")
             or behavioral.get("pre_trade_capture", {}).get("strategy_name")
             or behavioral.get("strategy_tag")
-            or "UNSPECIFIED",
+            or "",
             "setup_name": system.get("metadata", {}).get("setup_name")
             or behavioral.get("pre_trade_capture", {}).get("strategy_name")
-            or "UNSPECIFIED",
+            or "",
             "entry_price": entry_details.get("entry_price", 0.0),
             "entry_time": entry_details.get("entry_time") or record["created_at"],
             "stop_loss_at_entry": entry_details.get("stop_loss_at_entry"),
             "target_at_entry": entry_details.get("target_at_entry"),
             "quantity": entry_details.get("quantity", 0.0),
             "lot_size": entry_details.get("lot_size", 1.0),
+            "contract_size": entry_details.get("contract_size", 1.0),
             "leverage_used": entry_details.get("leverage_used", 1.0),
             "minimum_target_price": entry_details.get("minimum_target_price"),
             "exit_price": exit_details.get("exit_price"),

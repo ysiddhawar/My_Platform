@@ -11,7 +11,7 @@
 #property strict
 
 input string MyPlatformInbox = "MyPlatform\\inbox";
-input string BridgeAccountId = "";
+input string BridgeAccountId = "DEFAULT";
 input int PollIntervalSeconds = 1;
 
 int OnInit()

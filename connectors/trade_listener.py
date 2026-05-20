@@ -165,6 +165,12 @@ class TradeListener:
                 if exit_price_val is None or not isinstance(exit_price_val, (int, float)):
                     raise TradeListenerError("exit_price required and must be numeric")
 
+                # Apply actual commission and swaps from broker before closing
+                if payload.get("commission") is not None:
+                    trade._commission = float(payload["commission"])
+                if payload.get("swaps") is not None:
+                    trade._swaps = float(payload["swaps"])
+
                 trade.close_trade(
                     exit_price=float(exit_price_val),
                     exit_time=payload.get("exit_time"),
@@ -190,6 +196,12 @@ class TradeListener:
                 exit_price_val = payload.get("exit_price")
                 if exit_price_val is None or not isinstance(exit_price_val, (int, float)):
                     raise TradeListenerError("exit_price required and must be numeric")
+
+                # Apply actual commission and swaps from broker before closing
+                if payload.get("commission") is not None:
+                    stored_trade._commission = float(payload["commission"])
+                if payload.get("swaps") is not None:
+                    stored_trade._swaps = float(payload["swaps"])
 
                 stored_trade.close_trade(
                     exit_price=float(exit_price_val),
@@ -407,7 +419,6 @@ class TradeListener:
         
         if "balance" in payload:
             account._current_balance = float(payload["balance"])
-            account._initial_balance = float(payload["balance"]) # Also update initial_balance for prototype
         if "equity" in payload:
             account.update_equity(float(payload["equity"]))
         if "margin" in payload:

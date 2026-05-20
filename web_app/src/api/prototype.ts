@@ -44,7 +44,7 @@ function buildDailyReturns(trades: TradeRecord[], capital: number = 100000): num
   trades
     .filter((trade) => trade.is_closed)
     .forEach((trade) => {
-      const dayKey = trade.exit_date || trade.entry_date || trade.exit_time?.slice(0, 10) || trade.entry_time?.slice(0, 10);
+      const dayKey = trade.exit_date || trade.exit_time?.slice(0, 10) || trade.entry_date || trade.entry_time?.slice(0, 10);
       if (!dayKey) return;
       dailyPnls.set(dayKey, (dailyPnls.get(dayKey) || 0) + Number(trade.net_pnl || 0));
     });
@@ -60,7 +60,7 @@ function buildStrategyMatrix(trades: TradeRecord[], capital: number = 100000) {
 
   closed.forEach((trade) => {
     const label = String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified');
-    const dayKey = trade.exit_date || trade.entry_date || trade.exit_time?.slice(0, 10) || trade.entry_time?.slice(0, 10);
+    const dayKey = trade.exit_date || trade.exit_time?.slice(0, 10) || trade.entry_date || trade.entry_time?.slice(0, 10);
     if (!dayKey) return;
     const bucket = grouped.get(label) || new Map<string, number>();
     bucket.set(dayKey, (bucket.get(dayKey) || 0) + Number(trade.net_pnl || 0) / capital);

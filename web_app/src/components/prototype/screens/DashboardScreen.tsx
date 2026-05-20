@@ -128,10 +128,27 @@ function rollingWindow(values: number[], size: number, mapper: (window: number[]
   return output;
 }
 
-function buildReturns(trades: TradeRecord[], startingCapital: number): number[] {
-  let equity = startingCapital;
+function tradeCloseTimestamp(trade: TradeRecord): string {
+  return trade.exit_time
+    || (trade.exit_date ? `${trade.exit_date}T23:59:59` : '')
+    || trade.entry_time
+    || (trade.entry_date ? `${trade.entry_date}T00:00:00` : '')
+    || '';
+}
+
+function tradeCloseDateKey(trade: TradeRecord): string | undefined {
+  return trade.exit_date || trade.exit_time?.slice(0, 10) || trade.entry_date || trade.entry_time?.slice(0, 10);
+}
+
+function chronologicalClosedTrades(trades: TradeRecord[]): TradeRecord[] {
   return trades
     .filter((trade) => trade.is_closed)
+    .sort((left, right) => tradeCloseTimestamp(left).localeCompare(tradeCloseTimestamp(right)));
+}
+
+function buildReturns(trades: TradeRecord[], startingCapital: number): number[] {
+  let equity = startingCapital;
+  return chronologicalClosedTrades(trades)
     .map((trade) => {
       const pnl = Number(trade.net_pnl || 0);
       const denominator = Math.max(Math.abs(equity), 1);
@@ -142,10 +159,10 @@ function buildReturns(trades: TradeRecord[], startingCapital: number): number[] 
 }
 
 function buildEquitySeries(trades: TradeRecord[], startingCapital: number): Array<{ t: string; equity: number }> {
-  const closed = trades.filter((trade) => trade.is_closed);
+  const closed = chronologicalClosedTrades(trades);
   return closed.reduce<Array<{ t: string; equity: number }>>((rows, trade, index) => {
     const previous = rows[index - 1]?.equity || startingCapital;
-    const rawDate = trade.entry_date || trade.entry_time?.slice(0, 10);
+    const rawDate = tradeCloseDateKey(trade);
     rows.push({
       t: rawDate || `Trade ${index + 1}`,
       equity: previous + Number(trade.net_pnl || 0),
@@ -156,10 +173,9 @@ function buildEquitySeries(trades: TradeRecord[], startingCapital: number): Arra
 
 function buildDailyReturns(trades: TradeRecord[], startingCapital: number): number[] {
   const byDay = new Map<string, number>();
-  trades
-    .filter((trade) => trade.is_closed)
+  chronologicalClosedTrades(trades)
     .forEach((trade) => {
-      const dayKey = trade.entry_date || trade.entry_time?.slice(0, 10);
+      const dayKey = tradeCloseDateKey(trade);
       if (!dayKey) return;
       byDay.set(dayKey, (byDay.get(dayKey) || 0) + Number(trade.net_pnl || 0));
     });
@@ -177,10 +193,9 @@ function buildDailyReturns(trades: TradeRecord[], startingCapital: number): numb
 
 function buildDailyNetCurve(trades: TradeRecord[]): Array<{ date: string; label: string; net: number; cumulative: number }> {
   const byDay = new Map<string, number>();
-  trades
-    .filter((trade) => trade.is_closed)
+  chronologicalClosedTrades(trades)
     .forEach((trade) => {
-      const dayKey = trade.entry_date || trade.entry_time?.slice(0, 10);
+      const dayKey = tradeCloseDateKey(trade);
       if (!dayKey) return;
       byDay.set(dayKey, (byDay.get(dayKey) || 0) + Number(trade.net_pnl || 0));
     });
@@ -264,7 +279,7 @@ function buildCompactTimeHeatmap(input: { heatmapX: string[]; heatmapY: string[]
 
 function buildGroupedSeries(trades: TradeRecord[], returns: number[], selector: (trade: TradeRecord, index: number) => string): Record<string, number[]> {
   const buckets = new Map<string, number[]>();
-  trades.filter((trade) => trade.is_closed).forEach((trade, index) => {
+  chronologicalClosedTrades(trades).forEach((trade, index) => {
     const key = selector(trade, index);
     const bucket = buckets.get(key) || [];
     bucket.push(returns[index] ?? 0);
@@ -542,11 +557,11 @@ function formatAxisDate(value: string) {
 }
 
 function buildRollingDateSeries(trades: TradeRecord[], values: number[], key: string, fallbackPrefix: string) {
-  const closed = trades.filter((trade) => trade.is_closed);
+  const closed = chronologicalClosedTrades(trades);
   const offset = Math.max(0, closed.length - values.length);
   return values.map((value, index) => {
     const trade = closed[index + offset];
-    const rawDate = trade?.entry_date || trade?.entry_time?.slice(0, 10);
+    const rawDate = trade ? tradeCloseDateKey(trade) : undefined;
     return {
       label: rawDate || `${fallbackPrefix}${index + 1}`,
       [key]: normalizeDisplayNumber(value),
@@ -744,7 +759,7 @@ function metricRequirement(key: string): string | null {
 
 function buildMetricPayload(data: OverviewData | undefined, startingCapital: number) {
   const trades = data?.trades || [];
-  const closed = trades.filter((trade) => trade.is_closed);
+  const closed = chronologicalClosedTrades(trades);
   const returns = buildDailyReturns(trades, startingCapital);
   const books = buildBookMatrix(trades, returns);
   const strategyPayload = Object.fromEntries(books.labels.map((label, index) => [label, books.matrix[index]]));
@@ -777,14 +792,14 @@ function buildMetricPayload(data: OverviewData | undefined, startingCapital: num
 
 function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: number): Record<string, unknown> {
   const trades = data?.trades || [];
-  const closed = trades.filter((trade) => trade.is_closed);
+  const closed = chronologicalClosedTrades(trades);
   const returns = buildReturns(trades, startingCapital);
   const netPnls = closed.map((trade) => Number(trade.net_pnl || 0));
   const wins = netPnls.filter((value) => value > 0);
-  const losses = netPnls.filter((value) => value < 0);
+  const losses = netPnls.filter((value) => value <= 0);
   const avgWin = average(wins);
   const avgLoss = average(losses);
-  const payoffRatio = losses.length ? Math.abs(avgWin / avgLoss) : 0;
+  const payoffRatio = losses.length && avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
   const grossProfit = wins.reduce((sum, value) => sum + value, 0);
   const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
   const returnsStd = sampleStd(returns);
@@ -1014,7 +1029,7 @@ function buildGroupVisuals(
   registerChartRef?: (title: string) => (node: HTMLDivElement | null) => void,
 ) {
   const trades = overview?.trades || [];
-  const closed = trades.filter((trade) => trade.is_closed);
+  const closed = chronologicalClosedTrades(trades);
   const returns = buildReturns(trades, startingCapital);
   const book = buildBookMatrix(trades, returns);
   const covariance = covarianceMatrix(book.matrix);
@@ -1091,7 +1106,7 @@ function buildGroupVisuals(
           <PieMetricChart 
             data={[
               { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
-              { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
+              { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) <= 0).length },
             ]} 
             className="h-[300px]"
           />
@@ -1722,7 +1737,8 @@ export function DashboardScreen() {
     enabled: Boolean(accountId),
   });
   const { data: accounts } = useQuery(['prototype-accounts'], fetchAccounts);
-  const startingCapital = Number(accounts?.find((a) => a.account_id === accountId)?.initial_balance) || 100000;
+  const selectedAccount = useMemo(() => accounts?.find((account) => account.account_id === accountId) || null, [accounts, accountId]);
+  const startingCapital = Number(selectedAccount?.initial_balance) || 100000;
   const { data: chartCatalog } = useQuery(['prototype-chart-catalog'], fetchChartCatalog);
   const [selectedPresetName, setSelectedPresetName] = useState('');
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1850,23 +1866,49 @@ export function DashboardScreen() {
     };
   }, [data, marketFilter, sideFilter, statusFilter, strategyFilter, symbolFilter, mistakeFilter, datePreset, now, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter, spreadThresholds, slippageThresholds, quantityThresholds, costThresholds, pnlThresholds, riskThresholds, rrrThresholds, rMultipleThresholds, confidenceThresholds]);
 
+  const dashboardDataFingerprint = useMemo(() => {
+    const tradeFingerprint = (filteredData?.trades || [])
+      .map((trade) => [
+        trade.trade_id,
+        trade.is_closed ? 'closed' : 'open',
+        trade.entry_time || '',
+        trade.exit_time || '',
+        trade.entry_price ?? '',
+        trade.exit_price ?? '',
+        trade.quantity ?? '',
+        trade.lot_size ?? '',
+        trade.gross_pnl ?? '',
+        trade.net_pnl ?? '',
+        trade.commission ?? '',
+        trade.fees ?? '',
+        trade.swaps ?? '',
+        trade.risk_amount ?? '',
+        trade.r_multiple ?? '',
+      ].join(':'))
+      .join('|');
+    const sessionFingerprint = (filteredData?.sessionDailyTotals || [])
+      .map((row) => `${row.day}:${row.total_platform_time_minutes}:${row.platform_session_count}`)
+      .join('|');
+    return `${startingCapital}::${tradeFingerprint}::${sessionFingerprint}::${filteredData?.missedOpportunityCount || 0}`;
+  }, [filteredData, startingCapital]);
+
   const metricPayload = useMemo(() => buildMetricPayload(filteredData, startingCapital), [filteredData, startingCapital]);
   const { data: metricRun, isLoading: metricsLoading } = useQuery(
-    ['prototype-dashboard-metrics', accountId, filteredData?.trades?.length, filteredData?.sessionDailyTotals?.length, filteredData?.missedOpportunityCount, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
+    ['prototype-dashboard-metrics', accountId, dashboardDataFingerprint, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
     () => runMetricComputation({ data: metricPayload, phase: 'research' }),
-    { enabled: Boolean(filteredData?.trades?.length) },
+    { enabled: Boolean(filteredData?.trades?.length && selectedAccount) },
   );
 
   const metrics = useMemo(() => {
     const trades = filteredData?.trades || [];
-    const closed = trades.filter((trade) => trade.is_closed);
+    const closed = chronologicalClosedTrades(trades);
     const closedPnls = closed.map((trade) => Number(trade.net_pnl || 0));
     const returns = buildReturns(trades, startingCapital);
     const winTrades = closed.filter((trade) => Number(trade.net_pnl || 0) > 0);
-    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
+    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) <= 0);
     const wins = winTrades.length;
     const losses = lossTrades.length;
-    const openTrades = Math.max(0, trades.length - wins - losses);
+    const openTrades = trades.filter((trade) => !trade.is_closed).length;
     const avgWin = average(winTrades.map((trade) => Number(trade.net_pnl || 0)));
     const avgLoss = average(lossTrades.map((trade) => Number(trade.net_pnl || 0)));
     const grossProfit = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
@@ -1887,7 +1929,7 @@ export function DashboardScreen() {
     const topWin = winTrades.length ? Math.max(...winTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
     const topLoss = lossTrades.length ? Math.min(...lossTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
     const winStreak = longestStreak(closedPnls, (value) => value > 0);
-    const lossStreak = longestStreak(closedPnls, (value) => value < 0);
+    const lossStreak = longestStreak(closedPnls, (value) => value <= 0);
     const sizedTrades = trades.filter((trade) => Number.isFinite(Number(trade.quantity || trade.lot_size || 0)) && Number(trade.quantity || trade.lot_size || 0) > 0);
     const avgSize = average(sizedTrades.map((trade) => Number(trade.quantity || trade.lot_size || 0)));
     const dayVolume = new Map<string, number>();
@@ -1931,7 +1973,7 @@ export function DashboardScreen() {
       avgDailyVolume,
       avgSize,
     };
-  }, [filteredData]);
+  }, [filteredData, startingCapital]);
 
   const dashboardResults = metricRun?.results || {};
   const derivedMetrics = useMemo(() => buildDerivedMetrics(filteredData, startingCapital), [filteredData, startingCapital]);
@@ -1980,15 +2022,15 @@ export function DashboardScreen() {
     [dashboardResults, derivedMetrics, displayedSections],
   );
   const { data: chartContracts } = useQuery(
-    ['prototype-dashboard-chart-contracts', accountId, filteredData?.trades?.length, filteredData?.sessionDailyTotals?.length, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
+    ['prototype-dashboard-chart-contracts', accountId, dashboardDataFingerprint, strategyFilter, marketFilter, symbolFilter, sideFilter, mistakeFilter, statusFilter, datePreset, timeFilter, dayFilter, spreadFilter, slippageFilter, holdTimeFilter, exitReasonFilter, quantityFilter, lotSizeFilter, leverageFilter, costFilter, netPnlFilter, riskAmountFilter, rrrFilter, rMultipleFilter, confidenceFilter, emotionFilter, probabilityFilter, closedEarlyFilter],
     () =>
       fetchDashboardChartContracts({
         account_id: accountId as string,
         overview: filteredData as OverviewData,
-        metrics: mergedResults,
+        metrics: { ...mergedResults, capital: startingCapital, total_capital: startingCapital },
         filters: dashboardFilters,
       }),
-    { enabled: Boolean(accountId && filteredData) },
+    { enabled: Boolean(accountId && filteredData && selectedAccount) },
   );
 
   const strategyOptions = useMemo(

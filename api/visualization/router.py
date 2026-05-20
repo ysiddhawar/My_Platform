@@ -119,6 +119,15 @@ def _extract_scalar(metric: Any) -> float:
     return 0.0
 
 
+def _trade_close_timestamp(trade: Dict[str, Any]) -> str:
+    return (
+        str(trade.get("exit_time") or "")
+        or (f"{trade.get('exit_date')}T23:59:59" if trade.get("exit_date") else "")
+        or str(trade.get("entry_time") or "")
+        or (f"{trade.get('entry_date')}T00:00:00" if trade.get("entry_date") else "")
+    )
+
+
 @router.post("/performance-dashboard", response_model=DashboardResponse)
 def build_performance_dashboard(request: PerformanceDashboardRequest):
     try:
@@ -263,11 +272,15 @@ def get_chart_catalog():
 def build_dashboard_contracts(request: DashboardChartContractsRequest):
     trades = request.overview.get("trades", []) if isinstance(request.overview, dict) else []
     metrics = request.metrics if isinstance(request.metrics, dict) else {}
-    closed = [trade for trade in trades if trade.get("is_closed")]
+    closed = sorted(
+        [trade for trade in trades if trade.get("is_closed")],
+        key=_trade_close_timestamp,
+    )
     wins = [trade for trade in closed if _num(trade.get("net_pnl")) > 0]
-    losses = [trade for trade in closed if _num(trade.get("net_pnl")) < 0]
+    losses = [trade for trade in closed if _num(trade.get("net_pnl")) <= 0]
+    capital = _num(metrics.get("capital")) or _num(metrics.get("total_capital")) or 100000.0
     returns = [
-        (_num(trade.get("net_pnl")) / 100000.0)
+        (_num(trade.get("net_pnl")) / capital)
         for trade in closed
         if trade.get("net_pnl") is not None
     ]

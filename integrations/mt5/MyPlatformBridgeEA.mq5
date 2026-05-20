@@ -3,11 +3,12 @@
 #property description "MyPlatform MT5 sync bridge: exports historical trades, open positions, and live lifecycle updates to MyPlatform."
 
 input string MyPlatformInboxFolder = "MyPlatform\\inbox";
-input string BridgeAccountId = "";
+input string BridgeAccountId = "dd38e1db-2a2a-4c34-9a65-38128d00d0b3";
 input int PollIntervalSeconds = 1;
 input bool SyncOpenPositionsOnInit = true;
 input bool SyncHistoryOnInit = true;
 input int HistoryLookbackDays = 90;
+input int SyncOpenPositionsIntervalMinutes = 5;
 
 struct PositionSnapshot
   {
@@ -24,6 +25,7 @@ struct PositionSnapshot
 
 PositionSnapshot g_position_cache[];
 string           g_status_message = "MT5 sync bridge active";
+datetime          g_last_open_positions_sync = 0;
 
 int OnInit()
   {
@@ -37,6 +39,7 @@ int OnInit()
    SyncAccountState();
 
    LoadCurrentPositionCache();
+   g_last_open_positions_sync = TimeCurrent();
    EventSetTimer(MathMax(PollIntervalSeconds,1));
    Comment("");
    return(INIT_SUCCEEDED);
@@ -53,6 +56,15 @@ void OnTimer()
    EmitPositionModificationEvents();
    LoadCurrentPositionCache();
    SyncAccountState();
+
+   // macOS Wine reliability: OnTradeTransaction() may not fire. Periodically re-sync
+   // all open positions so the backend can detect missed closes via diffing.
+   int interval_seconds = MathMax(SyncOpenPositionsIntervalMinutes * 60, 60);
+   if(TimeCurrent() - g_last_open_positions_sync >= interval_seconds)
+     {
+      SyncOpenPositionsSnapshot();
+      g_last_open_positions_sync = TimeCurrent();
+     }
   }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans,
@@ -123,6 +135,7 @@ void EmitPositionModificationEvents()
 void SyncOpenPositionsSnapshot()
   {
    int total = PositionsTotal();
+   string open_ids = "[";
    for(int index=0; index<total; index++)
      {
       ulong ticket = PositionGetTicket(index);
@@ -138,9 +151,23 @@ void SyncOpenPositionsSnapshot()
       WriteEventFile(
          BuildEventFileName("open_position",snapshot.position_id,0),
          "TRADE_FILLED",
-         BuildFilledPayload(snapshot,0,"MT5 Open Position Sync","MT5 Open Position Sync")
+         BuildFilledPayload(snapshot,0,"","")
       );
+
+      if(open_ids != "[")
+         open_ids += ",";
+      open_ids += "\"" + FormatUnsigned(snapshot.position_id) + "\"";
      }
+   open_ids += "]";
+
+   // Write a single OPEN_POSITIONS_SYNC event with all open position IDs
+   // so the backend can detect closes by comparing against its last snapshot.
+   string sync_payload = "{";
+   sync_payload += JsonStringPair("account_id",ResolveAccountId()) + ",";
+   sync_payload += "\"open_position_ids\":" + open_ids + ",";
+   sync_payload += JsonNumberPair("position_count",total);
+   sync_payload += "}";
+   WriteEventFile("open_positions_sync_" + IntegerToString((int)TimeCurrent()),"OPEN_POSITIONS_SYNC",sync_payload);
   }
 
 void SyncAccountState()
@@ -252,7 +279,7 @@ void EmitHistoricalTradeByPosition(const ulong position_id)
    snapshot.swap_value = total_swap;
 
    string trade_id = FormatTradeId(position_id);
-   string fill_payload = BuildFilledPayload(snapshot,entry_deal,"MT5 Historical Sync","MT5 Historical Sync");
+   string fill_payload = BuildFilledPayload(snapshot,entry_deal,"","");
    string close_payload = BuildClosedPayload(
       trade_id,
       HistoryDealGetDouble(exit_deal,DEAL_PRICE),
@@ -307,7 +334,7 @@ void EmitBrokerEventsFromDeal(const ulong deal_ticket)
             WriteEventFile(
                BuildEventFileName("fill",(ulong)position_id,deal_ticket),
                "TRADE_FILLED",
-               BuildFilledPayload(current,deal_ticket,"MT5 Live Sync","MT5 Live Sync")
+               BuildFilledPayload(current,deal_ticket,"","")
             );
          else
             WriteEventFile(
@@ -360,7 +387,7 @@ void EmitBrokerEventsFromDeal(const ulong deal_ticket)
          WriteEventFile(
             BuildEventFileName("fill",(ulong)position_id,deal_ticket),
             "TRADE_FILLED",
-            BuildFilledPayload(current,deal_ticket,"MT5 Reversal Sync","MT5 Reversal Sync")
+            BuildFilledPayload(current,deal_ticket,"","")
          );
         }
      }
@@ -432,6 +459,7 @@ string BuildFilledPayload(PositionSnapshot &snapshot,
                           const string strategy_tag,
                           const string setup_name)
   {
+   double contract_size = SymbolInfoDouble(snapshot.symbol, SYMBOL_TRADE_CONTRACT_SIZE);
    string payload = "{";
    payload += JsonStringPair("trade_id",FormatTradeId(snapshot.position_id)) + ",";
    payload += JsonStringPair("account_id",ResolveAccountId()) + ",";
@@ -445,6 +473,7 @@ string BuildFilledPayload(PositionSnapshot &snapshot,
    payload += JsonStringPair("entry_time",TimeToString(snapshot.entry_time,TIME_DATE|TIME_SECONDS)) + ",";
    payload += JsonNumberPair("quantity",snapshot.volume) + ",";
    payload += JsonNumberPair("lot_size",1.0) + ",";
+   payload += JsonNumberPair("contract_size",contract_size) + ",";
    payload += JsonNumberPair("leverage_used",1.0) + ",";
    payload += JsonNumberPair("stop_loss_at_entry",snapshot.stop_loss) + ",";
    payload += JsonNumberPair("target_at_entry",snapshot.take_profit) + ",";
@@ -467,6 +496,7 @@ string BuildFallbackFillPayload(const string trade_id,
                                 const double commission,
                                 const double swap_value)
   {
+   double contract_size = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
    string payload = "{";
    payload += JsonStringPair("trade_id",trade_id) + ",";
    payload += JsonStringPair("account_id",ResolveAccountId()) + ",";
@@ -474,12 +504,13 @@ string BuildFallbackFillPayload(const string trade_id,
    payload += JsonStringPair("symbol",symbol) + ",";
    payload += JsonStringPair("market_type",DetectMarketType(symbol)) + ",";
    payload += JsonStringPair("side",side) + ",";
-   payload += JsonStringPair("strategy_tag","MT5 Live Sync") + ",";
-   payload += JsonStringPair("setup_name","MT5 Live Sync") + ",";
+   payload += JsonStringPair("strategy_tag","") + ",";
+   payload += JsonStringPair("setup_name","") + ",";
    payload += JsonNumberPair("entry_price",entry_price) + ",";
    payload += JsonStringPair("entry_time",TimeToString(entry_time,TIME_DATE|TIME_SECONDS)) + ",";
    payload += JsonNumberPair("quantity",quantity) + ",";
    payload += JsonNumberPair("lot_size",1.0) + ",";
+   payload += JsonNumberPair("contract_size",contract_size) + ",";
    payload += JsonNumberPair("leverage_used",1.0) + ",";
    payload += JsonNumberPair("commission",commission) + ",";
    payload += JsonNumberPair("swaps",swap_value) + ",";
