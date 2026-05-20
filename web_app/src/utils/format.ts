@@ -18,7 +18,7 @@ export const formatCompactNumber = (value: number): string =>
     maximumFractionDigits: 1,
   }).format(Number.isFinite(value) ? value : 0);
 
-export const formatDateTime = (value?: string | null): string => {
+export const formatDateTime = (value?: string | null, timeZone?: string): string => {
   if (!value) {
     return '—';
   }
@@ -26,16 +26,20 @@ export const formatDateTime = (value?: string | null): string => {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat('en-US', {
+  const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-  }).format(date);
+  };
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Intl.DateTimeFormat('en-US', options).format(date);
 };
 
-export const formatDate = (value?: string | null): string => {
+export const formatDate = (value?: string | null, timeZone?: string): string => {
   if (!value) {
     return '—';
   }
@@ -43,14 +47,18 @@ export const formatDate = (value?: string | null): string => {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat('en-US', {
+  const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  }).format(date);
+  };
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Intl.DateTimeFormat('en-US', options).format(date);
 };
 
-export const formatTime = (value?: string | null): string => {
+export const formatTime = (value?: string | null, timeZone?: string): string => {
   if (!value) {
     return '—';
   }
@@ -58,10 +66,14 @@ export const formatTime = (value?: string | null): string => {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat('en-US', {
+  const options: Intl.DateTimeFormatOptions = {
     hour: 'numeric',
     minute: '2-digit',
-  }).format(date);
+  };
+  if (timeZone) {
+    options.timeZone = timeZone;
+  }
+  return new Intl.DateTimeFormat('en-US', options).format(date);
 };
 
 export const formatMinutes = (value: number): string => {

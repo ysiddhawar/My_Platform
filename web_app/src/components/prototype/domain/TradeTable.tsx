@@ -91,8 +91,8 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   <Cell selected={isSelected}>{trade.strategy_tag || trade.strategy || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.setup_name || '—'}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.entry_price || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatTime(trade.entry_time)}</Cell>
-                  <Cell selected={isSelected}>{formatDate(trade.entry_time)}</Cell>
+                  <Cell selected={isSelected}>{formatTime(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
+                  <Cell selected={isSelected}>{formatDate(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{trade.entry_day_of_week || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.entry_timezone || '—'}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.entry_spread || 0))}</Cell>
@@ -100,8 +100,8 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   <Cell selected={isSelected}>{formatNumber(Number(trade.stop_loss_at_entry || 0))}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.target_at_entry || 0))}</Cell>
                   <Cell selected={isSelected}>{trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—'}</Cell>
-                  <Cell selected={isSelected}>{formatTime(trade.exit_time)}</Cell>
-                  <Cell selected={isSelected}>{formatDate(trade.exit_time)}</Cell>
+                  <Cell selected={isSelected}>{formatTime(trade.exit_time, trade.entry_timezone || 'UTC')}</Cell>
+                  <Cell selected={isSelected}>{formatDate(trade.exit_time, trade.entry_timezone || 'UTC')}</Cell>
                   <Cell selected={isSelected}>{trade.exit_day_of_week || '—'}</Cell>
                   <Cell selected={isSelected}>{trade.exit_reason || '—'}</Cell>
                   <Cell selected={isSelected}>{formatNumber(Number(trade.slippage_at_exit || 0))}</Cell>

@@ -4,6 +4,7 @@ import csv
 import io
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -142,6 +143,14 @@ def import_trade_csv(request: ImportCsvRequest, user: dict = Depends(get_current
         imported = 0
         errors = []
         reader = csv.DictReader(io.StringIO(request.csv_text))
+        # Resolve account timezone
+        account = api_registry.account_repository.get(request.account_id)
+        if account is not None:
+            account_metadata = account.to_dict().get("metadata") or {}
+            timezone_name = account_metadata.get("timezone_name", request.timezone_name)
+        else:
+            timezone_name = request.timezone_name
+        
         for index, row in enumerate(reader, start=2):
             try:
                 trade = _trade_from_csv_row(
@@ -150,6 +159,7 @@ def import_trade_csv(request: ImportCsvRequest, user: dict = Depends(get_current
                     broker_id=request.broker_id,
                     market_type=request.market_type,
                     default_strategy_name=request.default_strategy_name,
+                    timezone_name=timezone_name,
                 )
                 api_registry.trade_repository.save_trade(trade)
                 imported += 1
@@ -196,6 +206,7 @@ def _trade_from_csv_row(
     broker_id: str,
     market_type: str,
     default_strategy_name: str,
+    timezone_name: str = "UTC",
 ) -> Trade:
     normalized = {_normalize_key(key): (value.strip() if isinstance(value, str) else value) for key, value in row.items()}
     symbol = _pick(normalized, "symbol", "ticker", "instrument")
@@ -206,8 +217,8 @@ def _trade_from_csv_row(
     exit_price_raw = _pick(normalized, "exit_price", "exit", "close_price", "sell_price")
     quantity = _as_float(_pick(normalized, "quantity", "qty", "size", "volume") or 1.0)
     strategy_name = _pick(normalized, "strategy", "strategy_name", "setup", "setup_name") or default_strategy_name
-    entry_time = _as_datetime(_pick(normalized, "entry_time", "open_time", "opened_at", "date_time", "date"))
-    exit_time = _as_datetime(_pick(normalized, "exit_time", "close_time", "closed_at"))
+    entry_time = _as_datetime(_pick(normalized, "entry_time", "open_time", "opened_at", "date_time", "date"), timezone_name)
+    exit_time = _as_datetime(_pick(normalized, "exit_time", "close_time", "closed_at"), timezone_name)
     stop_loss = _as_optional_float(_pick(normalized, "stop_loss", "stop_loss_price", "sl"))
     target = _as_optional_float(_pick(normalized, "target", "target_price", "tp"))
     commission = _as_optional_float(_pick(normalized, "commission")) or 0.0
@@ -300,10 +311,14 @@ def _as_optional_float(value: Any) -> Optional[float]:
         return None
 
 
-def _as_datetime(value: Any) -> Optional[datetime]:
+def _as_datetime(value: Any, timezone_name: str = "UTC") -> Optional[datetime]:
     if value in (None, ""):
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        if value.tzinfo:
+            return value
+        return value.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(timezone.utc)
     parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    if parsed.tzinfo:
+        return parsed
+    return parsed.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(timezone.utc)

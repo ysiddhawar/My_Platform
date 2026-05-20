@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any, Optional
 from threading import RLock
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from core.context import Context
 from models.trade import Trade
@@ -126,6 +127,13 @@ class TradeListener:
         payload = dict(event.get("payload") or {})
         payload = self._normalize_trade_identifier(payload)
         payload = self._merge_prepared_ticket_context(payload)
+
+        # --- Timezone-aware conversion for MT5 naive local times ---
+        account_timezone = self._resolve_account_timezone(payload.get("account_id"))
+        payload["entry_time"] = self._convert_to_utc(payload.get("entry_time"), account_timezone)
+        payload["exit_time"] = self._convert_to_utc(payload.get("exit_time"), account_timezone)
+        # ----------------------------------------------------------
+
         active_session = self.context.get_cache("active_platform_session")
         if active_session:
             payload.setdefault("platform_session_id", active_session.get("session_id"))
@@ -155,6 +163,11 @@ class TradeListener:
 
         payload = self._normalize_trade_identifier(dict(event.get("payload") or {}))
         trade_id = payload.get("trade_id")
+
+        # --- Timezone-aware conversion for MT5 naive local exit_time ---
+        account_timezone = self._resolve_account_timezone(payload.get("account_id"))
+        payload["exit_time"] = self._convert_to_utc(payload.get("exit_time"), account_timezone)
+        # -----------------------------------------------------------------
 
         trades = self.context.get_cache("trades") or []
         trade_found = False
@@ -513,6 +526,55 @@ class TradeListener:
         elif trade_id.startswith("mt5_pos_"):
             payload["trade_id"] = "mt5_" + trade_id[len("mt5_pos_"):]
         return payload
+
+    # ==========================================================
+    # TIMEZONE UTILITIES
+    # ==========================================================
+
+    def _resolve_account_timezone(self, account_id: Optional[str]) -> str:
+        """
+        Look up the account's configured timezone from Account.metadata["timezone_name"].
+        Defaults to "UTC" if not found.
+        """
+        if account_id and self.account_repository is not None:
+            account = self.account_repository.get(account_id)
+            if account is not None:
+                metadata = account.to_dict().get("metadata") or {}
+                return metadata.get("timezone_name", "UTC")
+        return "UTC"
+
+    @staticmethod
+    def _convert_to_utc(value: Any, timezone_name: str) -> Any:
+        """
+        If value is a naive datetime string (like "2026.03.11 14:15:00"),
+        interpret it in the given timezone and return the equivalent ISO UTC string.
+        If value is already timezone-aware or None, return as-is.
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            if value.tzinfo is None:
+                return value.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(timezone.utc)
+            return value
+        if isinstance(value, str):
+            normalized = value.strip()
+            try:
+                # Try ISO format first (already timezone-aware)
+                dt = datetime.fromisoformat(normalized.replace("Z", "+00:00"))
+                if dt.tzinfo is not None:
+                    return dt.astimezone(timezone.utc).isoformat()
+            except ValueError:
+                pass
+            # Try MT5 format: naive local time
+            for pattern in ("%Y.%m.%d %H:%M:%S", "%Y.%m.%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                try:
+                    dt = datetime.strptime(normalized, pattern)
+                    return dt.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(timezone.utc).isoformat()
+                except ValueError:
+                    continue
+            # If all parsing fails, return original (will be handled downstream)
+            return value
+        return value
 
     # ==========================================================
     # VALIDATION
