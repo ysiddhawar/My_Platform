@@ -9,7 +9,13 @@ export const formatCurrency = (value: number): string =>
 
 export const formatNumber = (value: number): string =>
   new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: 5,   // ← Changed from 2 to 5
+    maximumFractionDigits: 5,
+  }).format(Number.isFinite(value) ? value : 0);
+
+export const formatRatio = (value: number): string =>
+  new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(Number.isFinite(value) ? value : 0);
 
 export const formatCompactNumber = (value: number): string =>
