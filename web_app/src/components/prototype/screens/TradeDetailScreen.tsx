@@ -1,17 +1,34 @@
+import { useMemo } from 'react';
 import { useQuery } from 'react-query';
 
-import { fetchTradeBundle } from '@/api/prototype';
+import { fetchTradeBundle, fetchTrades } from '@/api/prototype';
+import type { TradeBundle, TradeRecord } from '@/types/prototype';
 import { TradeBundlePanel } from '@/components/prototype/domain/TradeBundlePanel';
 import { usePrototypeStore } from '@/state/prototypeStore';
 
 export function TradeDetailScreen() {
+  const accountId = usePrototypeStore((state) => state.accountId);
   const selectedTradeId = usePrototypeStore((state) => state.selectedTradeId);
   const setActiveView = usePrototypeStore((state) => state.setActiveView);
 
-  const { data, isLoading, error } = useQuery(
+  const { data: trades } = useQuery<TradeRecord[]>(
+    ['prototype-trades', accountId],
+    () => fetchTrades(accountId as string),
+    {
+      enabled: Boolean(accountId),
+      staleTime: 60_000,
+    },
+  );
+
+  const { data, isLoading, error } = useQuery<TradeBundle>(
     ['prototype-trade-bundle', selectedTradeId],
     () => fetchTradeBundle(selectedTradeId as string),
     { enabled: Boolean(selectedTradeId) },
+  );
+
+  const tradeFromList = useMemo(
+    () => (trades ?? []).find((trade) => trade.trade_id === selectedTradeId) ?? null,
+    [trades, selectedTradeId],
   );
 
   if (!selectedTradeId) {
@@ -37,9 +54,18 @@ export function TradeDetailScreen() {
     return <p className="rounded-[20px] border border-rose-500/20 bg-rose-50 px-5 py-4 text-sm text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{error.message}</p>;
   }
 
-  if (!data?.trade) {
+  if (!data?.trade && !tradeFromList) {
     return <p className="text-sm text-gray-600 dark:text-slate-400">No trade data returned.</p>;
   }
 
-  return <TradeBundlePanel bundle={data} />;
+  const mergedBundle: TradeBundle = {
+    ...data!,
+    trade: tradeFromList ?? data?.trade ?? null,
+  };
+
+  if (!mergedBundle.trade) {
+    return <p className="text-sm text-gray-600 dark:text-slate-400">No trade data available.</p>;
+  }
+
+  return <TradeBundlePanel bundle={mergedBundle} />;
 }
