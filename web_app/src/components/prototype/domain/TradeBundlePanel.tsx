@@ -25,7 +25,7 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Trade ID" value={(trade.trade_id || '').replace(/^mt5_/, '')} helper={`${trade.symbol} · ${trade.market_type || '—'} · ${trade.side}`} />
         <SummaryCard label="Net PnL" value={formatCurrency(Number(trade.net_pnl || 0))} helper={`Gross ${formatCurrency(Number(trade.gross_pnl || 0))} · Cost ${formatCurrency(Number(trade.total_cost || 0))}`} />
-        <SummaryCard label="Entry / Exit" value={formatTime(trade.entry_time, trade.entry_timezone || 'UTC')} helper={trade.exit_time ? `Exit ${formatTime(trade.exit_time, trade.entry_timezone || 'UTC')}` : 'Trade still open'} />
+        <SummaryCard label="Entry / Exit" value={formatDateTime(trade.entry_time, trade.entry_timezone || 'UTC')} helper={trade.exit_time ? `Exit ${formatDateTime(trade.exit_time, trade.entry_timezone || 'UTC')}` : 'Trade still open'} />
         <SummaryCard label="Setup" value={(() => { const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null; const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null; return tag || strat || '—'; })()} helper={`${trade.probability_bucket || '—'} · ${trade.close_classification || (trade.is_closed ? 'Closed' : 'Open')}`} />
       </section>
 
@@ -39,11 +39,11 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
                 ['Symbol', trade.symbol],
                 ['Market Type', trade.market_type || '—'],
                 ['Side', trade.side],
-                ['Strategy Tag', trade.strategy_tag || trade.strategy || '—'],
-                ['Strategy Setup', trade.setup_name || '—'],
-                ['Probability Bucket', trade.probability_bucket || '—'],
-                ['Confidence Score', trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—'],
-                ['Emotion Tag', trade.emotion_tag || '—'],
+                ['Setup', (() => {
+                  const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null;
+                  const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null;
+                  return tag || strat || '—';
+                })()],
               ]}
             />
           </Group>
@@ -55,9 +55,6 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
                 ['Entry Time', formatDateTime(trade.entry_time)],
                 ['Entry Date', formatDate(trade.entry_time)],
                 ['Entry Day', trade.entry_day_of_week || '—'],
-                ['Entry Timezone', trade.entry_timezone || '—'],
-                ['Entry Spread', formatNumber(Number(trade.entry_spread || 0))],
-                ['Slippage at Entry', formatNumber(Number(trade.slippage_at_entry || 0))],
                 ['Stop Loss at Entry', formatNumber(Number(trade.stop_loss_at_entry || 0))],
                 ['Target at Entry', formatNumber(Number(trade.target_at_entry || 0))],
                 ['Minimum Target Price', trade.minimum_target_price != null ? formatNumber(Number(trade.minimum_target_price)) : '—'],
@@ -73,7 +70,6 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
                 ['Exit Date', formatDate(trade.exit_time)],
                 ['Exit Day', trade.exit_day_of_week || '—'],
                 ['Exit Reason', trade.exit_reason || '—'],
-                ['Slippage at Exit', formatNumber(Number(trade.slippage_at_exit || 0))],
                 ['Close Classification', trade.close_classification || '—'],
                 ['Closed Before Plan', trade.closed_before_plan ? 'Yes' : 'No'],
               ]}
@@ -84,9 +80,6 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
             <FieldGrid
               items={[
                 ['Quantity', formatNumber(Number(trade.quantity || 0))],
-                ['Lot Size', formatNumber(Number(trade.lot_size || 0))],
-                ['Leverage Used', formatNumber(Number(trade.leverage_used || 0))],
-                ['Fees', formatCurrency(Number(trade.fees || 0))],
                 ['Commission', formatCurrency(Number(trade.commission || 0))],
                 ['Swaps', formatCurrency(Number(trade.swaps || 0))],
                 ['Slippage Cost', formatCurrency(Number(trade.slippage_cost || 0))],
@@ -120,10 +113,10 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
               items={[
                 ['Strategy', String(preTrade.strategy_name || '—')],
                 ['Probability', String(preTrade.probability_bucket || '—')],
+                ['Confidence Score', trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—'],
                 ['Checklist Selected', preChecklist.join(', ') || '—'],
                 ['Mandatory Checklist', preMandatory.join(', ') || '—'],
                 ['All Criteria Selected', preTrade.all_criteria_selected ? 'Yes' : 'No'],
-                ['Notes', String(preTrade.notes || '—')],
               ]}
             />
           </Group>
@@ -133,6 +126,7 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
               items={[
                 ['Strategy', String(postTrade.strategy_name || '—')],
                 ['Probability', String(postTrade.probability_bucket || '—')],
+                ['Confidence Score', trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—'],
                 ['Checklist Selected', postChecklist.join(', ') || '—'],
                 ['Mandatory Checklist', postMandatory.join(', ') || '—'],
                 ['All Criteria Selected', postTrade.all_criteria_selected ? 'Yes' : 'No'],
