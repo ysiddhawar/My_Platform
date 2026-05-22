@@ -1,5 +1,6 @@
+import { useCallback, useMemo, useState } from 'react';
 import type { TradeRecord } from '@/types/prototype';
-import { formatCurrency, formatDate, formatNumber, formatRatio, formatTime } from '@/utils/format';
+import { formatCurrency, formatDate, formatNumber, formatRatio } from '@/utils/format';
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -7,48 +8,235 @@ type TradeTableProps = {
   onSelectTrade: (tradeId: string) => void;
 };
 
-const headers = [
-  'Trade ID',
-  'Symbol',
-  'Market',
-  'Side',
-  'SETUP',
-  'Entry Price',
-  'Entry Time',
-  'Entry Date',
-  'Entry Day',
-  'Stop Loss',
-  'Target',
-  'Exit Price',
-  'Exit Time',
-  'Exit Date',
-  'Exit Day',
-  'Exit Reason',
-  'Quantity',
-  'Commission',
-  'Swaps',
-  'Slippage Cost',
-  'Gross PnL',
-  'Net PnL',
-  'Risk Amount',
-  'RRR',
-  'R Multiple',
-  'Confidence',
-  'Emotion',
-  'Probability',
-  'Closed Early',
-  'Status',
+type ColumnKey =
+  | 'trade_id'
+  | 'market_type'
+  | 'entry_price'
+  | 'entry_time'
+  | 'entry_day'
+  | 'stop_loss'
+  | 'target'
+  | 'exit_price'
+  | 'exit_time'
+  | 'exit_date'
+  | 'exit_day'
+  | 'exit_reason'
+  | 'quantity'
+  | 'commission'
+  | 'swaps'
+  | 'slippage_cost'
+  | 'gross_pnl'
+  | 'rrr'
+  | 'confidence_score'
+  | 'emotion_tag'
+  | 'probability_bucket'
+  | 'closed_before_plan'
+  | 'close_classification';
+
+const DEFAULT_COLUMNS: { key: string; label: string }[] = [
+  { key: 'entry_date', label: 'Entry Date' },
+  { key: 'symbol', label: 'Symbol' },
+  { key: 'status', label: 'Status' },
+  { key: 'net_pnl', label: 'Net PnL' },
+  { key: 'setup', label: 'Setup' },
+  { key: 'side', label: 'Side' },
+  { key: 'hold_time', label: 'Hold Time' },
+  { key: 'change_percent', label: 'Change %' },
+  { key: 'risk_amount', label: 'Risk Amount' },
+  { key: 'net_roi', label: 'Net ROI' },
+  { key: 'r_multiple', label: 'R Multiple' },
+  { key: 'fees', label: 'Fees' },
 ];
 
+const EXTRA_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'trade_id', label: 'Trade ID' },
+  { key: 'market_type', label: 'Market' },
+  { key: 'entry_price', label: 'Entry Price' },
+  { key: 'entry_time', label: 'Entry Time' },
+  { key: 'entry_day', label: 'Entry Day' },
+  { key: 'stop_loss', label: 'Stop Loss' },
+  { key: 'target', label: 'Target' },
+  { key: 'exit_price', label: 'Exit Price' },
+  { key: 'exit_time', label: 'Exit Time' },
+  { key: 'exit_date', label: 'Exit Date' },
+  { key: 'exit_day', label: 'Exit Day' },
+  { key: 'exit_reason', label: 'Exit Reason' },
+  { key: 'quantity', label: 'Quantity' },
+  { key: 'commission', label: 'Commission' },
+  { key: 'swaps', label: 'Swaps' },
+  { key: 'slippage_cost', label: 'Slippage Cost' },
+  { key: 'gross_pnl', label: 'Gross PnL' },
+  { key: 'rrr', label: 'RRR' },
+  { key: 'confidence_score', label: 'Confidence' },
+  { key: 'emotion_tag', label: 'Emotion' },
+  { key: 'probability_bucket', label: 'Probability' },
+  { key: 'closed_before_plan', label: 'Closed Early' },
+  { key: 'close_classification', label: 'Close Classification' },
+];
+
+const STORAGE_KEY = 'my_platform_journal_extra_columns';
+
+function loadExtraColumns(): ColumnKey[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ColumnKey[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistExtraColumns(keys: ColumnKey[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+}
+
+function computeHoldTime(entryTime: string, exitTime: string | null | undefined): string {
+  if (!exitTime) return '—';
+  const entry = new Date(entryTime).getTime();
+  const exit = new Date(exitTime).getTime();
+  if (Number.isNaN(entry) || Number.isNaN(exit)) return '—';
+  const diffMs = exit - entry;
+  if (diffMs < 0) return '—';
+  const totalMinutes = Math.round(diffMs / 60000);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function computeFees(trade: TradeRecord): number {
+  return (Number(trade.commission || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0) + Number(trade.fees || 0));
+}
+
+function formatChangePercent(trade: TradeRecord): string {
+  const pnl = Number(trade.net_pnl || 0);
+  if (!trade.risk_amount || Number(trade.risk_amount) <= 0 || !Number.isFinite(pnl)) return '—';
+  const pct = (pnl / Number(trade.risk_amount)) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+}
+
+function formatNetROI(trade: TradeRecord): string {
+  const pnl = Number(trade.net_pnl || 0);
+  if (!trade.risk_amount || Number(trade.risk_amount) <= 0 || !Number.isFinite(pnl)) return '—';
+  const roi = (pnl / Number(trade.risk_amount)) * 100;
+  return `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
+}
+
+
+
+function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean): { value: string; className?: string } {
+  switch (key) {
+    case 'trade_id':
+      return { value: trade.trade_id ? trade.trade_id.replace(/^mt5_/, '') : '—' };
+    case 'market_type':
+      return { value: trade.market_type || '—' };
+    case 'entry_price':
+      return { value: formatNumber(Number(trade.entry_price || 0)) };
+    case 'entry_time':
+      return { value: trade.entry_time ? formatDate(trade.entry_time, trade.entry_timezone || 'UTC') : '—' };
+    case 'entry_day':
+      return { value: trade.entry_day_of_week || '—' };
+    case 'stop_loss':
+      return { value: formatNumber(Number(trade.stop_loss_at_entry || 0)) };
+    case 'target':
+      return { value: formatNumber(Number(trade.target_at_entry || 0)) };
+    case 'exit_price':
+      return { value: trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—' };
+    case 'exit_time':
+      return { value: trade.exit_time ? formatDate(trade.exit_time, trade.entry_timezone || 'UTC') : '—' };
+    case 'exit_date':
+      return { value: trade.exit_date ? formatDate(trade.exit_date) : '—' };
+    case 'exit_day':
+      return { value: trade.exit_day_of_week || '—' };
+    case 'exit_reason':
+      return { value: trade.exit_reason || '—' };
+    case 'quantity':
+      return { value: formatNumber(Number(trade.quantity || 0)) };
+    case 'commission':
+      return { value: formatCurrency(Number(trade.commission || 0)) };
+    case 'swaps':
+      return { value: formatCurrency(Number(trade.swaps || 0)) };
+    case 'slippage_cost':
+      return { value: formatCurrency(Number(trade.slippage_cost || 0)) };
+    case 'gross_pnl':
+      return { value: formatCurrency(Number(trade.gross_pnl || 0)) };
+    case 'rrr':
+      return { value: formatRatio(Number(trade.rrr_at_entry || 0)) };
+    case 'confidence_score':
+      return { value: trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—' };
+    case 'emotion_tag':
+      return { value: trade.emotion_tag || '—' };
+    case 'probability_bucket':
+      return { value: trade.probability_bucket || '—' };
+    case 'closed_before_plan':
+      return { value: trade.closed_before_plan ? 'Yes' : 'No' };
+    case 'close_classification':
+      return { value: trade.close_classification || (trade.is_closed ? 'Closed' : 'Open') };
+    default:
+      return { value: '—' };
+  }
+}
+
 export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTableProps) {
+  const [extraColumns, setExtraColumns] = useState<ColumnKey[]>(loadExtraColumns);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+
+  const toggleExtraColumn = useCallback((key: ColumnKey) => {
+    setExtraColumns((prev) => {
+      const next = prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key];
+      persistExtraColumns(next);
+      return next;
+    });
+  }, []);
+
+  const allColumns = useMemo(() => {
+    const extra = EXTRA_COLUMNS.filter((col) => extraColumns.includes(col.key));
+    return [...DEFAULT_COLUMNS, ...extra];
+  }, [extraColumns]);
+
   return (
     <div className="overflow-hidden rounded-[26px] border border-black/10 bg-white dark:border-white/10 dark:bg-[#060606]">
+      <div className="border-b border-black/8 px-4 py-2 dark:border-white/10">
+        <div className="relative inline-block">
+          <button
+            type="button"
+            onClick={() => setShowColumnSelector((prev) => !prev)}
+            className="rounded-full border border-black/10 bg-gray-50 px-4 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[#FF5900] hover:text-[#FF5900] dark:border-white/10 dark:bg-[#0d0d0d] dark:text-slate-300 dark:hover:border-[#FF5900] dark:hover:text-[#FF5900]"
+          >
+            {showColumnSelector ? 'Done' : '+ Add Columns'}
+          </button>
+          {showColumnSelector && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-xl border border-black/10 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-[#121212]">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-slate-400">Show extra columns</p>
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {EXTRA_COLUMNS.map((col) => (
+                  <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-black transition hover:bg-gray-100 dark:text-white dark:hover:bg-white/10">
+                    <input
+                      type="checkbox"
+                      checked={extraColumns.includes(col.key)}
+                      onChange={() => toggleExtraColumn(col.key)}
+                      className="accent-[#FF5900]"
+                    />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
-        <table className="min-w-[2400px] border-separate border-spacing-0">
-          <thead>
+        <table className="min-w-[1400px] border-separate border-spacing-0">
+          <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50 dark:bg-[#0d0d0d]">
-              {headers.map((label) => (
-                <th key={label} className="border-b border-black/8 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600 dark:border-white/10 dark:text-slate-400">
+              {allColumns.map(({ key, label }) => (
+                <th
+                  key={key}
+                  className="border-b border-black/8 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600 dark:border-white/10 dark:text-slate-400"
+                >
                   {label}
                 </th>
               ))}
@@ -59,13 +247,17 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
               const tradeId = trade.trade_id || '—';
               const isSelected = tradeId === selectedTradeId;
               const pnl = Number(trade.net_pnl || 0);
-              const rowTone = !trade.is_closed
-                ? 'bg-white hover:bg-gray-50 dark:bg-[#060606] dark:hover:bg-[#0b0b0b]'
+              const netPnlColor = isSelected
+                ? pnl > 0 ? 'text-emerald-200' : pnl < 0 ? 'text-rose-200' : ''
+                : pnl > 0 ? 'text-emerald-600 dark:text-emerald-300' : pnl < 0 ? 'text-rose-600 dark:text-rose-300' : '';
+              const statusColor = !trade.is_closed
+                ? ''
                 : pnl > 0
-                  ? 'bg-emerald-50/70 hover:bg-emerald-50 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/14'
+                  ? 'text-[#55B685] font-semibold'
                   : pnl < 0
-                    ? 'bg-rose-50/70 hover:bg-rose-50 dark:bg-rose-500/10 dark:hover:bg-rose-500/14'
-                    : 'bg-white hover:bg-gray-50 dark:bg-[#060606] dark:hover:bg-[#0b0b0b]';
+                    ? 'text-[#DD524C] font-semibold'
+                    : '';
+
               return (
                 <tr
                   key={tradeId}
@@ -74,44 +266,40 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                       onSelectTrade(trade.trade_id);
                     }
                   }}
-                  className={`cursor-pointer transition duration-200 hover:shadow-[inset_0_0_0_1px_rgba(255,89,0,0.72)] ${isSelected ? 'bg-black text-white dark:bg-[#12142b]' : rowTone}`}
+                  className={`cursor-pointer transition duration-200 hover:shadow-[inset_0_0_0_1.5px_#FF5900] ${
+                    isSelected ? 'bg-black text-white dark:bg-[#12142b]' : 'bg-white hover:bg-gray-50/50 dark:bg-[#060606] dark:hover:bg-[#0b0b0b]/50'
+                  }`}
                 >
-                  <Cell selected={isSelected}>{trade.trade_id ? trade.trade_id.replace(/^mt5_/, '') : '—'}</Cell>
+                  <Cell selected={isSelected}>{trade.entry_time ? formatDate(trade.entry_time, trade.entry_timezone || 'UTC') : '—'}</Cell>
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
-                  <Cell selected={isSelected}>{trade.market_type || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.side}</Cell>
-                  <Cell selected={isSelected}>{(() => {
+                  <Cell selected={isSelected} className={statusColor}>
+                    {!trade.is_closed ? 'Open' : pnl > 0 ? 'Win' : pnl < 0 ? 'Loss' : 'Break Even'}
+                  </Cell>
+                  <Cell selected={isSelected} className={netPnlColor}>{formatCurrency(pnl)}</Cell>
+                  <Cell selected={isSelected}>
+                    {(() => {
                       const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null;
                       const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null;
                       return tag || strat || '—';
-                    })()}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.entry_price || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatTime(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
-                  <Cell selected={isSelected}>{formatDate(trade.entry_time, trade.entry_timezone || 'UTC')}</Cell>
-                  <Cell selected={isSelected}>{trade.entry_day_of_week || '—'}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.stop_loss_at_entry || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.target_at_entry || 0))}</Cell>
-                  <Cell selected={isSelected}>{trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—'}</Cell>
-                  <Cell selected={isSelected}>{formatTime(trade.exit_time, trade.entry_timezone || 'UTC')}</Cell>
-                  <Cell selected={isSelected}>{formatDate(trade.exit_time, trade.entry_timezone || 'UTC')}</Cell>
-                  <Cell selected={isSelected}>{trade.exit_day_of_week || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.exit_reason || '—'}</Cell>
-                  <Cell selected={isSelected}>{formatNumber(Number(trade.quantity || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.commission || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.swaps || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.slippage_cost || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.gross_pnl || 0))}</Cell>
-                  <Cell selected={isSelected} className={pnl >= 0 ? (isSelected ? 'text-emerald-200' : 'text-emerald-700 dark:text-emerald-300') : (isSelected ? 'text-rose-200' : 'text-rose-700 dark:text-rose-300')}>
-                    {formatCurrency(pnl)}
+                    })()}
                   </Cell>
-                  <Cell selected={isSelected}>{formatCurrency(Number(trade.risk_amount || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatRatio(Number(trade.rrr_at_entry || 0))}</Cell>
+                  <Cell selected={isSelected}>{trade.side}</Cell>
+                  <Cell selected={isSelected}>{computeHoldTime(trade.entry_time, trade.exit_time)}</Cell>
+                  <Cell selected={isSelected}>{formatChangePercent(trade)}</Cell>
+                  <Cell selected={isSelected}>
+                    {trade.risk_amount != null ? formatCurrency(Number(trade.risk_amount)) : '—'}
+                  </Cell>
+                  <Cell selected={isSelected}>{formatNetROI(trade)}</Cell>
                   <Cell selected={isSelected}>{formatRatio(Number(trade.r_multiple || 0))}</Cell>
-                  <Cell selected={isSelected}>{trade.confidence_score != null ? formatNumber(Number(trade.confidence_score)) : '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.emotion_tag || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.probability_bucket || '—'}</Cell>
-                  <Cell selected={isSelected}>{trade.closed_before_plan ? 'Yes' : 'No'}</Cell>
-                  <Cell selected={isSelected}>{trade.close_classification || (trade.is_closed ? 'Closed' : 'Open')}</Cell>
+                  <Cell selected={isSelected}>{formatCurrency(computeFees(trade))}</Cell>
+                  {extraColumns.map((key) => {
+                    const { value, className } = renderExtraCell(trade, key, isSelected);
+                    return (
+                      <Cell key={key} selected={isSelected} className={className}>
+                        {value}
+                      </Cell>
+                    );
+                  })}
                 </tr>
               );
             })}

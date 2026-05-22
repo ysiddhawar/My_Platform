@@ -31,12 +31,7 @@ export function JournalScreen() {
   return (
     <div className="space-y-6 text-black dark:text-white">
       <section className="flex flex-col gap-4 rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606] lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-black dark:text-white">Journal</h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
-            Complete trade records from the journal backend.
-          </p>
-        </div>
+        <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em] text-black dark:text-white">Journal</h2>
         <button
           type="button"
           onClick={() => void refetch()}
