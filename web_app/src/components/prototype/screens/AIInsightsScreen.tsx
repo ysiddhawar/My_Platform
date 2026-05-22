@@ -649,12 +649,6 @@ export function AIInsightsScreen() {
 
   return (
     <section className="space-y-5 text-black dark:text-white">
-      <div className="rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#222]">
-        <h2 className="text-[1.9rem] font-semibold tracking-[-0.05em]">AI Insights</h2>
-        <p className="mt-3 text-sm leading-6 text-black/65 dark:text-white/70">
-          This view now reads the unified backend insight engine. It cross-references your dashboard metrics, journal trades, missed opportunities, calendar behavior, and trading sessions to produce ranked findings and actionable next steps.
-        </p>
-      </div>
 
       {isLoading ? (
         <div className="rounded-[24px] border border-black/10 bg-white px-5 py-8 text-sm text-black/65 dark:border-white/10 dark:bg-[#222] dark:text-white/70">
