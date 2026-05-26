@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from 'react-query';
 
 import { fetchAIInsightsSummary } from '@/api/prototype';
@@ -443,6 +443,8 @@ export function AIInsightsScreen() {
     { enabled: Boolean(accountId), staleTime: 60000 },
   );
 
+  const [activeTab, setActiveTab] = useState<'good' | 'bad' | 'recommended'>('good');
+
   const findingLookup = useMemo(() => {
     if (!data) return {} as Record<string, AIInsightFinding>;
     const allFindings = [
@@ -492,17 +494,80 @@ export function AIInsightsScreen() {
 
       {!isLoading && !(error instanceof Error) && data ? (
         <>
+          {/* Tab Bar */}
+          <div className="sticky top-0 z-10 flex border-b border-black/10 bg-white dark:border-white/10 dark:bg-[#222]">
+            <button
+              onClick={() => setActiveTab('good')}
+              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg ${
+                activeTab === 'good'
+                  ? 'bg-white dark:bg-[#222] border border-b-0 border-black/10 dark:border-white/10 text-black dark:text-white'
+                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              GOOD
+            </button>
+            <button
+              onClick={() => setActiveTab('bad')}
+              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg ${
+                activeTab === 'bad'
+                  ? 'bg-white dark:bg-[#222] border border-b-0 border-black/10 dark:border-white/10 text-black dark:text-white'
+                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              BAD
+            </button>
+            <button
+              onClick={() => setActiveTab('recommended')}
+              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg ${
+                activeTab === 'recommended'
+                  ? 'bg-white dark:bg-[#222] border border-b-0 border-black/10 dark:border-white/10 text-black dark:text-white'
+                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              RECOMMENDED
+            </button>
+          </div>
 
+          {/* Tab Content */}
+          <div className="border border-t-0 border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
+            {activeTab === 'good' && (
+              <InsightSection
+                title="3. What is going right"
+                items={data.summary.what_is_going_right}
+                emptyMessage="No top-ranked strengths were returned for this account yet."
+                getDrilldown={buildFindingDrilldown}
+                onOpenDrilldown={openInsightDrilldown}
+              />
+            )}
 
+            {activeTab === 'bad' && (
+              <div className="space-y-4">
+                <InsightSection
+                  title="1. What is going wrong"
+                  items={data.summary.what_is_going_wrong}
+                  emptyMessage="No top-ranked weaknesses were returned for this account yet."
+                  getDrilldown={buildFindingDrilldown}
+                  onOpenDrilldown={openInsightDrilldown}
+                />
+                <InsightSection
+                  title="2. Why it is going wrong"
+                  items={data.summary.why_it_is_going_wrong}
+                  emptyMessage="No top-ranked causes were returned for this account yet."
+                  getDrilldown={buildFindingDrilldown}
+                  onOpenDrilldown={openInsightDrilldown}
+                />
+              </div>
+            )}
 
-
-
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <InsightSection title="1. What is going wrong" items={data.summary.what_is_going_wrong} emptyMessage="No top-ranked weaknesses were returned for this account yet." getDrilldown={buildFindingDrilldown} onOpenDrilldown={openInsightDrilldown} />
-            <InsightSection title="2. Why it is going wrong" items={data.summary.why_it_is_going_wrong} emptyMessage="No top-ranked causes were returned for this account yet." getDrilldown={buildFindingDrilldown} onOpenDrilldown={openInsightDrilldown} />
-            <InsightSection title="3. What is going right" items={data.summary.what_is_going_right} emptyMessage="No top-ranked strengths were returned for this account yet." getDrilldown={buildFindingDrilldown} onOpenDrilldown={openInsightDrilldown} />
-            <RecommendationSection title="4. What to do next" items={data.summary.what_to_do_next} emptyMessage="No top-ranked next steps were returned for this account yet." getDrilldown={(item) => buildRecommendationDrilldown(item, findingLookup)} onOpenDrilldown={openInsightDrilldown} />
+            {activeTab === 'recommended' && (
+              <RecommendationSection
+                title="4. What to do next"
+                items={data.summary.what_to_do_next}
+                emptyMessage="No top-ranked next steps were returned for this account yet."
+                getDrilldown={(item) => buildRecommendationDrilldown(item, findingLookup)}
+                onOpenDrilldown={openInsightDrilldown}
+              />
+            )}
           </div>
         </>
       ) : null}
