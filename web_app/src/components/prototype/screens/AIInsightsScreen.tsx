@@ -200,7 +200,7 @@ function InsightSection({
   getDrilldown,
   onOpenDrilldown,
 }: {
-  title: string;
+  title?: string | null;
   items: AIInsightFinding[];
   emptyMessage: string;
   getDrilldown?: (finding: AIInsightFinding) => DrilldownAction | null;
@@ -208,10 +208,12 @@ function InsightSection({
 }) {
   return (
     <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
-        <span className="rounded-full bg-black/6 px-3 py-1 text-xs font-semibold text-black/70 dark:bg-white/10 dark:text-white/70">{items.length}</span>
-      </div>
+      {title ? (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
+          <span className="rounded-full bg-black/6 px-3 py-1 text-xs font-semibold text-black/70 dark:bg-white/10 dark:text-white/70">{items.length}</span>
+        </div>
+      ) : null}
       <div className="mt-4 space-y-4">
         {items.length ? items.map((item) => <InsightCard key={item.id} item={item} drilldown={getDrilldown?.(item)} onDrilldown={onOpenDrilldown} />) : <EmptyState message={emptyMessage} />}
       </div>
@@ -226,7 +228,7 @@ function RecommendationSection({
   getDrilldown,
   onOpenDrilldown,
 }: {
-  title: string;
+  title?: string | null;
   items: AIRecommendation[];
   emptyMessage: string;
   getDrilldown?: (recommendation: AIRecommendation) => DrilldownAction | null;
@@ -234,10 +236,12 @@ function RecommendationSection({
 }) {
   return (
     <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
-        <span className="rounded-full bg-black/6 px-3 py-1 text-xs font-semibold text-black/70 dark:bg-white/10 dark:text-white/70">{items.length}</span>
-      </div>
+      {title ? (
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
+          <span className="rounded-full bg-black/6 px-3 py-1 text-xs font-semibold text-black/70 dark:bg-white/10 dark:text-white/70">{items.length}</span>
+        </div>
+      ) : null}
       <div className="mt-4 space-y-4">
         {items.length ? items.map((item) => <RecommendationCard key={item.id} item={item} drilldown={getDrilldown?.(item)} onDrilldown={onOpenDrilldown} />) : <EmptyState message={emptyMessage} />}
       </div>
@@ -533,11 +537,9 @@ export function AIInsightsScreen() {
           </div>
 
           {/* Tab Content */}
-          <div className="px-2 md:px-3 xl:px-4">
             <div className="border border-t-0 border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
               {activeTab === 'good' && (
                 <InsightSection
-                  title="3. What is going right"
                   items={data.summary.what_is_going_right}
                   emptyMessage="No top-ranked strengths were returned for this account yet."
                   getDrilldown={buildFindingDrilldown}
@@ -548,14 +550,12 @@ export function AIInsightsScreen() {
               {activeTab === 'bad' && (
                 <div className="space-y-4">
                   <InsightSection
-                    title="1. What is going wrong"
                     items={data.summary.what_is_going_wrong}
                     emptyMessage="No top-ranked weaknesses were returned for this account yet."
                     getDrilldown={buildFindingDrilldown}
                     onOpenDrilldown={openInsightDrilldown}
                   />
                   <InsightSection
-                    title="2. Why it is going wrong"
                     items={data.summary.why_it_is_going_wrong}
                     emptyMessage="No top-ranked causes were returned for this account yet."
                     getDrilldown={buildFindingDrilldown}
@@ -566,14 +566,12 @@ export function AIInsightsScreen() {
 
               {activeTab === 'recommended' && (
                 <RecommendationSection
-                  title="4. What to do next"
                   items={data.summary.what_to_do_next}
                   emptyMessage="No top-ranked next steps were returned for this account yet."
                   getDrilldown={(item) => buildRecommendationDrilldown(item, findingLookup)}
                   onOpenDrilldown={openInsightDrilldown}
                 />
             )}
-            </div>
           </div>
         </>
       ) : null}
