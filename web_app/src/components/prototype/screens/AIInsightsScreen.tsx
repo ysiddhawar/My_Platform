@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from 'react-query';
 
 import { fetchAIInsightsSummary } from '@/api/prototype';
@@ -438,7 +438,7 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-export function AIInsightsScreen() {
+export function AIInsightsScreen({ activeTab, onTabChange }: { activeTab: 'good' | 'bad' | 'recommended'; onTabChange: (tab: 'good' | 'bad' | 'recommended') => void }) {
   const accountId = usePrototypeStore((state) => state.accountId);
   const openInsightDrilldown = usePrototypeStore((state) => state.openInsightDrilldown);
   const { data, isLoading, error } = useQuery(
@@ -447,7 +447,7 @@ export function AIInsightsScreen() {
     { enabled: Boolean(accountId), staleTime: 60000 },
   );
 
-  const [activeTab, setActiveTab] = useState<'good' | 'bad' | 'recommended'>('good');
+
 
   const findingLookup = useMemo(() => {
     if (!data) return {} as Record<string, AIInsightFinding>;
@@ -501,41 +501,7 @@ export function AIInsightsScreen() {
       ) : null}
 
       {!isLoading && !(error instanceof Error) && data ? (
-        <>
-          {/* Tab Bar - edge to edge */}
-          <div className="sticky top-0 z-10 flex border-b border-black/10 bg-white dark:border-white/10 dark:bg-[#222]">
-            <button
-              onClick={() => setActiveTab('good')}
-              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
-                activeTab === 'good'
-                  ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
-                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              GOOD
-            </button>
-            <button
-              onClick={() => setActiveTab('bad')}
-              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
-                activeTab === 'bad'
-                  ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
-                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              BAD
-            </button>
-            <button
-              onClick={() => setActiveTab('recommended')}
-              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
-                activeTab === 'recommended'
-                  ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
-                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              RECOMMENDED
-            </button>
-          </div>
-
+<>
           {/* Tab Content */}
               {activeTab === 'good' && (
                 <InsightSection

@@ -35,6 +35,7 @@ export function PrototypeShell() {
   const setAccountId = usePrototypeStore((state) => state.setAccountId);
   const hydrateWorkspaceLayout = usePrototypeStore((state) => state.hydrateWorkspaceLayout);
   const exportWorkspaceLayout = usePrototypeStore((state) => state.exportWorkspaceLayout);
+  const [aiActiveTab, setAiActiveTab] = useState<'good' | 'bad' | 'recommended'>('good');
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   const { data: accounts = [] } = useQuery(['prototype-accounts'], fetchAccounts);
   const { data: integrations = [] } = useQuery(['prototype-account-integrations'], fetchAccountIntegrations, {
@@ -136,6 +137,8 @@ export function PrototypeShell() {
             accounts={accounts}
             onChooseAccount={(nextAccountId) => setAccountId(nextAccountId)}
             onOpenAccountPicker={() => setAccountPickerOpen(true)}
+            aiActiveTab={aiActiveTab}
+            onAiTabChange={setAiActiveTab}
           />
           <main
           className={`flex-1 overflow-x-hidden overflow-y-auto ${
@@ -163,14 +166,14 @@ export function PrototypeShell() {
                   insightWorkspacePanel ? (
                     <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)] xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
                       <div className="min-w-0">
-                        <AIInsightsScreen />
+                        <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} />
                       </div>
                       <div className="min-w-0">
                         <InsightWorkspacePanel />
                       </div>
                     </div>
                   ) : (
-                    <AIInsightsScreen />
+                    <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} />
                   )
                 ) : null}
                 {activeView === 'missed-opportunities' ? <MissedOpportunitiesScreen /> : null}

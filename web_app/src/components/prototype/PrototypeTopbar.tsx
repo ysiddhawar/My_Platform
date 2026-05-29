@@ -23,9 +23,11 @@ type PrototypeTopbarProps = {
   accounts: AccountSummary[];
   onChooseAccount: (accountId: string) => void;
   onOpenAccountPicker: () => void;
+  aiActiveTab: 'good' | 'bad' | 'recommended';
+  onAiTabChange: (tab: 'good' | 'bad' | 'recommended') => void;
 };
 
-export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccount, onOpenAccountPicker }: PrototypeTopbarProps) {
+export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccount, onOpenAccountPicker, aiActiveTab, onAiTabChange }: PrototypeTopbarProps) {
   const isDashboard = activeView === 'dashboard';
   const isCalendar = activeView === 'calendar';
   const isAIInsights = activeView === 'ai-insights';
@@ -54,6 +56,8 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
           accounts={accounts}
           onChooseAccount={onChooseAccount}
           onOpenAccountPicker={onOpenAccountPicker}
+          activeTab={aiActiveTab}
+          onTabChange={onAiTabChange}
         />
       ) : (
         <div className="flex items-start justify-between gap-2">
@@ -224,21 +228,55 @@ function AIInsightsTopbarControls({
   accounts,
   onChooseAccount,
   onOpenAccountPicker,
+  activeTab,
+  onTabChange,
 }: {
   accountId: string | null;
   accounts: AccountSummary[];
   onChooseAccount: (accountId: string) => void;
   onOpenAccountPicker: () => void;
+  activeTab: 'good' | 'bad' | 'recommended';
+  onTabChange: (tab: 'good' | 'bad' | 'recommended') => void;
 }) {
+  const tabConfig = [
+    { key: 'good' as const, label: 'GOOD' },
+    { key: 'bad' as const, label: 'BAD' },
+    { key: 'recommended' as const, label: 'RECOMMENDED' },
+  ];
+
   return (
-    <div className="flex items-center justify-end gap-1.5">
-      <AccountSelectControl
-        accountId={accountId}
-        accounts={accounts}
-        onChooseAccount={onChooseAccount}
-        onOpenAccountPicker={onOpenAccountPicker}
-      />
-      <ThemeToggle />
+    <div className="flex items-center gap-3">
+      {/* Tabs — fill available space */}
+      <div className="flex flex-1 items-stretch gap-0">
+        {tabConfig.map(({ key, label }) => {
+          const isActive = activeTab === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onTabChange(key)}
+              className={`flex-1 px-3 py-2 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
+                isActive
+                  ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
+                  : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Controls — pushed to the right */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <AccountSelectControl
+          accountId={accountId}
+          accounts={accounts}
+          onChooseAccount={onChooseAccount}
+          onOpenAccountPicker={onOpenAccountPicker}
+        />
+        <ThemeToggle />
+      </div>
     </div>
   );
 }
