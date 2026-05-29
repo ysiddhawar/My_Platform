@@ -98,6 +98,8 @@ web_app/.env.test.local
 web_app/.env.production.local
 web_app/.next/
 web_app/out/
+# TypeScript incremental build info
+*.tsbuildinfo
 # Next.js build output
 .next/
 out/
