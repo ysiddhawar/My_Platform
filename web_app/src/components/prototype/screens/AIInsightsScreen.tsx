@@ -537,7 +537,6 @@ export function AIInsightsScreen() {
           </div>
 
           {/* Tab Content */}
-            <div className="border border-t-0 border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
               {activeTab === 'good' && (
                 <InsightSection
                   items={data.summary.what_is_going_right}
@@ -572,7 +571,6 @@ export function AIInsightsScreen() {
                   onOpenDrilldown={openInsightDrilldown}
                 />
             )}
-          </div>
         </>
       ) : null}
     </section>
