@@ -28,6 +28,7 @@ type PrototypeTopbarProps = {
 export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccount, onOpenAccountPicker }: PrototypeTopbarProps) {
   const isDashboard = activeView === 'dashboard';
   const isCalendar = activeView === 'calendar';
+  const isAIInsights = activeView === 'ai-insights';
   const selectedAccount = accounts.find((account) => account.account_id === accountId) || null;
 
   return (
@@ -42,6 +43,13 @@ export function PrototypeTopbar({ activeView, accountId, accounts, onChooseAccou
         />
       ) : isCalendar ? (
         <CalendarTopbarControls
+          accountId={accountId}
+          accounts={accounts}
+          onChooseAccount={onChooseAccount}
+          onOpenAccountPicker={onOpenAccountPicker}
+        />
+      ) : isAIInsights ? (
+        <AIInsightsTopbarControls
           accountId={accountId}
           accounts={accounts}
           onChooseAccount={onChooseAccount}
@@ -207,6 +215,30 @@ function CalendarTopbarControls({
         />
         <ThemeToggle />
       </div>
+    </div>
+  );
+}
+
+function AIInsightsTopbarControls({
+  accountId,
+  accounts,
+  onChooseAccount,
+  onOpenAccountPicker,
+}: {
+  accountId: string | null;
+  accounts: AccountSummary[];
+  onChooseAccount: (accountId: string) => void;
+  onOpenAccountPicker: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      <AccountSelectControl
+        accountId={accountId}
+        accounts={accounts}
+        onChooseAccount={onChooseAccount}
+        onOpenAccountPicker={onOpenAccountPicker}
+      />
+      <ThemeToggle />
     </div>
   );
 }
