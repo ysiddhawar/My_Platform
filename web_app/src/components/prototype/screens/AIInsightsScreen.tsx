@@ -506,7 +506,7 @@ export function AIInsightsScreen() {
           <div className="sticky top-0 z-10 flex border-b border-black/10 bg-white dark:border-white/10 dark:bg-[#222]">
             <button
               onClick={() => setActiveTab('good')}
-              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
+              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
                 activeTab === 'good'
                   ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
                   : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
@@ -516,7 +516,7 @@ export function AIInsightsScreen() {
             </button>
             <button
               onClick={() => setActiveTab('bad')}
-              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
+              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
                 activeTab === 'bad'
                   ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
                   : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
@@ -526,7 +526,7 @@ export function AIInsightsScreen() {
             </button>
             <button
               onClick={() => setActiveTab('recommended')}
-              className={`px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
+              className={`flex-1 text-center px-5 py-3 text-sm font-semibold uppercase tracking-wide transition rounded-t-lg hover:ring-2 hover:ring-[#FF5900] hover:ring-inset ${
                 activeTab === 'recommended'
                   ? 'bg-[#FF5900] text-white border border-b-0 border-[#FF5900]'
                   : 'bg-transparent text-black/50 dark:text-white/50 hover:text-black dark:hover:text-white'
