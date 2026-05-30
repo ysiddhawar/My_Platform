@@ -323,6 +323,46 @@ export type AIRecommendation = {
   } | null;
 };
 
+export type AIInsightMetricProjection = {
+  metric_key: string;
+  label: string;
+  current_value: string;
+  projected_value: string;
+  delta_label: string;
+  direction: 'better' | 'worse' | 'neutral';
+  visual_type: 'metric' | 'bar' | 'mini_line' | 'curve' | 'weekday_bar' | 'comparison';
+  points?: number[];
+  baseline_points?: number[];
+  labels?: string[];
+};
+
+export type AIInsightProjectionGroup = {
+  key: 'continued' | 'fixed' | 'long_term';
+  metrics: AIInsightMetricProjection[];
+};
+
+export type AIInsightTabCard = {
+  id: string;
+  title: string;
+  main_point: string;
+  why: string;
+  evidence_highlights: AIInsightEvidence[];
+  projected_effect: string;
+  projection_groups?: AIInsightProjectionGroup[];
+  confidence: 'low' | 'medium' | 'high';
+  sample_size: number;
+  confidence_basis_label: string;
+  confidence_basis_count: number;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  priority?: 'now' | 'soon' | 'later';
+};
+
+export type AIInsightSummaryTabs = {
+  bad: AIInsightTabCard[];
+  good: AIInsightTabCard[];
+  recommended: AIInsightTabCard[];
+};
+
 export type AISectionReview = {
   what_is_going_wrong: AIInsightFinding[];
   why_it_is_going_wrong: AIInsightFinding[];
@@ -369,6 +409,7 @@ export type AIInsightsMetadata = {
 export type AIInsightsResponse = {
   headline_summary: string[];
   summary: AISectionReview;
+  summary_tabs?: AIInsightSummaryTabs;
   detailed_review: {
     dashboard: AIDashboardDetailedReview;
     journal: AISectionReview;

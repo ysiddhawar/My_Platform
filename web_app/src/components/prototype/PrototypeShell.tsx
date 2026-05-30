@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from 'react-query';
 
 import { connectMt5FileBridge, createConnectedAccount, fetchAccountIntegrations, fetchAccounts, fetchWorkspaceLayout, saveWorkspaceLayout, seedInvestorDemoPack, validateMt5FileBridge } from '@/api/prototype';
 import { AccountPickerModal } from '@/components/prototype/AccountPickerModal';
-import { InsightWorkspacePanel } from '@/components/prototype/InsightWorkspacePanel';
 import { PrototypeSidebar } from '@/components/prototype/PrototypeSidebar';
 import { PrototypeTopbar } from '@/components/prototype/PrototypeTopbar';
 import { AIInsightsScreen } from '@/components/prototype/screens/AIInsightsScreen';
@@ -30,7 +29,6 @@ export function PrototypeShell() {
   const dashboardGroupOrder = usePrototypeStore((state) => state.dashboardGroupOrder);
   const dashboardMetricGroup = usePrototypeStore((state) => state.dashboardMetricGroup);
   const dashboardMetricSize = usePrototypeStore((state) => state.dashboardMetricSize);
-  const insightWorkspacePanel = usePrototypeStore((state) => state.insightWorkspacePanel);
   const setActiveView = usePrototypeStore((state) => state.setActiveView);
   const setAccountId = usePrototypeStore((state) => state.setAccountId);
   const hydrateWorkspaceLayout = usePrototypeStore((state) => state.hydrateWorkspaceLayout);
@@ -162,20 +160,7 @@ export function PrototypeShell() {
                 {activeView === 'dashboard' ? <DashboardScreen /> : null}
                 {activeView === 'journal' ? <JournalScreen /> : null}
                 {activeView === 'trade-detail' ? <TradeDetailScreen /> : null}
-                {activeView === 'ai-insights' ? (
-                  insightWorkspacePanel ? (
-                    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)] xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-                      <div className="min-w-0">
-                        <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} />
-                      </div>
-                      <div className="min-w-0">
-                        <InsightWorkspacePanel />
-                      </div>
-                    </div>
-                  ) : (
-                    <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} />
-                  )
-                ) : null}
+                {activeView === 'ai-insights' ? <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} /> : null}
                 {activeView === 'missed-opportunities' ? <MissedOpportunitiesScreen /> : null}
                 {activeView === 'calendar' ? <CalendarScreen /> : null}
                 {activeView === 'position-sizer' ? <PositionSizerScreen /> : null}

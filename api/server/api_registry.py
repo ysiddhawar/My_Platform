@@ -215,6 +215,7 @@ class APIRegistry:
             calendar_aggregation_engine=self.calendar_aggregation_engine,
             execution_engine=self.execution_engine,
             registry=self.registry,
+            account_repository=self.account_repository,
         )
         self.decision_engine = DecisionEngine()
         self.risk_modeling_engine = RiskModelingEngine()

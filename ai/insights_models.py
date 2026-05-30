@@ -9,6 +9,9 @@ from typing import Any, Dict, List, Optional
 SEVERITY_LEVELS = ("low", "medium", "high", "critical")
 CONFIDENCE_LEVELS = ("low", "medium", "high")
 RECOMMENDATION_PRIORITIES = ("now", "soon", "later")
+PROJECTION_DIRECTIONS = ("better", "worse", "neutral")
+PROJECTION_VISUAL_TYPES = ("metric", "bar", "mini_line", "curve", "weekday_bar", "comparison")
+PROJECTION_GROUP_KEYS = ("continued", "fixed", "long_term")
 
 
 def _validate_choice(value: str, allowed: tuple[str, ...], field_name: str) -> str:
@@ -148,6 +151,131 @@ class Recommendation:
         }
 
 
+@dataclass(frozen=True)
+class AIInsightMetricProjection:
+    metric_key: str
+    label: str
+    current_value: str
+    projected_value: str
+    delta_label: str
+    direction: str
+    visual_type: str
+    points: List[float] = field(default_factory=list)
+    baseline_points: List[float] = field(default_factory=list)
+    labels: List[str] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "direction", _validate_choice(self.direction, PROJECTION_DIRECTIONS, "projection direction"))
+        object.__setattr__(self, "visual_type", _validate_choice(self.visual_type, PROJECTION_VISUAL_TYPES, "projection visual type"))
+        if not self.metric_key:
+            raise ValueError("AIInsightMetricProjection requires metric_key")
+        if not self.label:
+            raise ValueError("AIInsightMetricProjection requires label")
+        if not self.current_value:
+            raise ValueError("AIInsightMetricProjection requires current_value")
+        if not self.projected_value:
+            raise ValueError("AIInsightMetricProjection requires projected_value")
+        if not self.delta_label:
+            raise ValueError("AIInsightMetricProjection requires delta_label")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "metric_key": self.metric_key,
+            "label": self.label,
+            "current_value": self.current_value,
+            "projected_value": self.projected_value,
+            "delta_label": self.delta_label,
+            "direction": self.direction,
+            "visual_type": self.visual_type,
+            "points": list(self.points),
+            "baseline_points": list(self.baseline_points),
+            "labels": list(self.labels),
+        }
+
+
+@dataclass(frozen=True)
+class AIInsightProjectionGroup:
+    key: str
+    metrics: List[AIInsightMetricProjection]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "key", _validate_choice(self.key, PROJECTION_GROUP_KEYS, "projection group key"))
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "key": self.key,
+            "metrics": [item.to_dict() for item in self.metrics],
+        }
+
+
+@dataclass(frozen=True)
+class AIInsightTabCard:
+    id: str
+    title: str
+    main_point: str
+    why: str
+    evidence_highlights: List[InsightEvidence]
+    projected_effect: str
+    projection_groups: List[AIInsightProjectionGroup]
+    confidence: str
+    sample_size: int
+    confidence_basis_label: str
+    confidence_basis_count: int
+    severity: Optional[str] = None
+    priority: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "confidence", _validate_choice(self.confidence, CONFIDENCE_LEVELS, "confidence"))
+        if self.severity is not None:
+            object.__setattr__(self, "severity", _validate_choice(self.severity, SEVERITY_LEVELS, "severity"))
+        if self.priority is not None:
+            object.__setattr__(self, "priority", _validate_choice(self.priority, RECOMMENDATION_PRIORITIES, "priority"))
+        if not self.id:
+            raise ValueError("AIInsightTabCard requires id")
+        if not self.title:
+            raise ValueError("AIInsightTabCard requires title")
+        if not self.main_point:
+            raise ValueError("AIInsightTabCard requires main_point")
+        if not self.why:
+            raise ValueError("AIInsightTabCard requires why")
+        if not self.confidence_basis_label:
+            raise ValueError("AIInsightTabCard requires confidence_basis_label")
+
+    def to_dict(self) -> Dict[str, Any]:
+        payload = {
+            "id": self.id,
+            "title": self.title,
+            "main_point": self.main_point,
+            "why": self.why,
+            "evidence_highlights": [item.to_dict() for item in self.evidence_highlights],
+            "projected_effect": self.projected_effect,
+            "projection_groups": [item.to_dict() for item in self.projection_groups],
+            "confidence": self.confidence,
+            "sample_size": self.sample_size,
+            "confidence_basis_label": self.confidence_basis_label,
+            "confidence_basis_count": self.confidence_basis_count,
+        }
+        if self.severity is not None:
+            payload["severity"] = self.severity
+        if self.priority is not None:
+            payload["priority"] = self.priority
+        return payload
+
+
+@dataclass
+class AIInsightSummaryTabs:
+    bad: List[AIInsightTabCard] = field(default_factory=list)
+    good: List[AIInsightTabCard] = field(default_factory=list)
+    recommended: List[AIInsightTabCard] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "bad": [item.to_dict() for item in self.bad],
+            "good": [item.to_dict() for item in self.good],
+            "recommended": [item.to_dict() for item in self.recommended],
+        }
+
+
 @dataclass
 class SectionReview:
     what_is_going_wrong: List[InsightFinding] = field(default_factory=list)
@@ -256,6 +384,7 @@ class AIInsightsMetadata:
 class AIInsightsResponse:
     headline_summary: List[str]
     summary: SectionReview
+    summary_tabs: AIInsightSummaryTabs
     detailed_review: Dict[str, Any]
     metadata: AIInsightsMetadata
     created_at_epoch: float = field(default_factory=time.time)
@@ -264,6 +393,7 @@ class AIInsightsResponse:
         return {
             "headline_summary": list(self.headline_summary),
             "summary": self.summary.to_dict(),
+            "summary_tabs": self.summary_tabs.to_dict(),
             "detailed_review": {
                 "dashboard": self.detailed_review["dashboard"].to_dict(),
                 "journal": self.detailed_review["journal"].to_dict(),
