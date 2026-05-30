@@ -207,7 +207,7 @@ function InsightSection({
   onOpenDrilldown?: (payload: InsightWorkspacePanelPayload) => void;
 }) {
   return (
-    <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
+    <section>
       {title ? (
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
@@ -235,7 +235,7 @@ function RecommendationSection({
   onOpenDrilldown?: (payload: InsightWorkspacePanelPayload) => void;
 }) {
   return (
-    <section className="rounded-[26px] border border-black/10 bg-white p-5 dark:border-white/10 dark:bg-[#222]">
+    <section>
       {title ? (
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold tracking-[-0.03em]">{title}</h3>
@@ -482,7 +482,7 @@ export function AIInsightsScreen({ activeTab, onTabChange }: { activeTab: 'good'
   }
 
   return (
-    <section className="text-black dark:text-white">
+    <>
 
         {isLoading ? (
         <div className="px-2 md:px-3 xl:px-4">
@@ -539,6 +539,6 @@ export function AIInsightsScreen({ activeTab, onTabChange }: { activeTab: 'good'
             )}
         </>
       ) : null}
-    </section>
+    </>
   );
 }

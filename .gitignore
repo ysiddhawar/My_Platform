@@ -90,6 +90,7 @@ htmlcov/
 
 # --- Next.js & Web App ---
 web_app/.next/
+web_app/next-env.d.ts
 web_app/out/
 web_app/build/
 web_app/.env.local
