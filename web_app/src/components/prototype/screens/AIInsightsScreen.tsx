@@ -298,7 +298,7 @@ function InsightTabCardView({ card, activeTab }: { card: AIInsightTabCard; activ
           <p className="mt-3 text-base leading-7 text-black/80 dark:text-white">{card.projected_effect}</p>
         </section>
 
-        <div className="space-y-4">
+        <div className={activeTab === 'bad' && (card.projection_groups || []).length === 2 ? 'grid grid-cols-1 gap-4 md:grid-cols-2' : 'space-y-4'}>
           {(card.projection_groups || []).map((group) => <ProjectionGroupView key={`${card.id}-${group.key}`} group={group} />)}
         </div>
 
