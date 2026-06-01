@@ -181,8 +181,8 @@ function MetricProjectionCard({ metric }: { metric: AIInsightMetricProjection })
 function ProjectionGroupView({ group }: { group: AIInsightProjectionGroup }) {
   if (!group.metrics.length) return null;
   return (
-    <section className="rounded-[30px] border border-black/8 bg-black/[0.025] p-4 dark:border-white/8 dark:bg-black/25 md:p-5">
-      <h4 className="text-sm font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-white/60">{GROUP_LABELS[group.key]}</h4>
+    <section className="relative rounded-[30px] border border-black/8 bg-black/[0.025] p-4 dark:border-white/8 dark:bg-black/25 md:p-5">
+      <h4 className="sticky top-0 z-10 bg-white dark:bg-[#1e1e1e] pb-2 border-b border-black/8 dark:border-white/8 rounded-t-[30px] text-sm font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-white/60">{GROUP_LABELS[group.key]}</h4>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {group.metrics.map((metric) => <MetricProjectionCard key={`${group.key}-${metric.metric_key}`} metric={metric} />)}
       </div>
@@ -298,7 +298,11 @@ function InsightTabCardView({ card, activeTab }: { card: AIInsightTabCard; activ
           <p className="mt-3 text-base leading-7 text-black/80 dark:text-white">{card.projected_effect}</p>
         </section>
 
-        <div className={activeTab === 'bad' && (card.projection_groups || []).length === 2 ? 'grid grid-cols-1 gap-4 md:grid-cols-2' : 'space-y-4'}>
+        <div className={
+          activeTab === 'bad' && (card.projection_groups || []).length === 2
+            ? 'grid grid-cols-1 gap-4 md:grid-cols-2 max-h-[500px] overflow-y-auto'
+            : 'max-h-[60vh] overflow-y-auto space-y-4'
+        }>
           {(card.projection_groups || []).map((group) => <ProjectionGroupView key={`${card.id}-${group.key}`} group={group} />)}
         </div>
 
