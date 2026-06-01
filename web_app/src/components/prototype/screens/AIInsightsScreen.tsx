@@ -294,8 +294,8 @@ function InsightTabCardView({ card, activeTab }: { card: AIInsightTabCard; activ
         <EvidenceChips card={card} />
 
         <section className="rounded-[26px] border border-black/8 bg-black/[0.025] p-4 dark:border-white/8 dark:bg-black/25">
-          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-black/55 dark:text-white/65">Projected effect</p>
-          <p className="mt-3 text-base leading-7 text-black/80 dark:text-white/88">{card.projected_effect}</p>
+          <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-black/55 dark:text-white/75">Projected effect</p>
+          <p className="mt-3 text-base leading-7 text-black/80 dark:text-white">{card.projected_effect}</p>
         </section>
 
         <div className="space-y-4">
