@@ -45,7 +45,9 @@ const DEFAULT_COLUMNS: { key: string; label: string }[] = [
   { key: 'risk_amount', label: 'Risk Amount' },
   { key: 'net_roi', label: 'Net ROI' },
   { key: 'r_multiple', label: 'R Multiple' },
-  { key: 'fees', label: 'Fees' },
+  { key: 'commission', label: 'Brokerage' },
+  { key: 'swaps', label: 'Swaps' },
+  { key: 'fees', label: 'Fee' },
 ];
 
 const EXTRA_COLUMNS: { key: ColumnKey; label: string }[] = [
@@ -106,9 +108,7 @@ function computeHoldTime(entryTime: string, exitTime: string | null | undefined)
   return `${hours}h ${minutes}m`;
 }
 
-function computeFees(trade: TradeRecord): number {
-  return (Number(trade.commission || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0) + Number(trade.fees || 0));
-}
+
 
 function formatChangePercent(trade: TradeRecord): string {
   const pnl = Number(trade.net_pnl || 0);
@@ -291,7 +291,9 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   </Cell>
                   <Cell selected={isSelected}>{formatNetROI(trade)}</Cell>
                   <Cell selected={isSelected}>{formatRatio(Number(trade.r_multiple || 0))}</Cell>
-                  <Cell selected={isSelected}>{formatCurrency(computeFees(trade))}</Cell>
+                  <Cell selected={isSelected}>{formatCurrency(Number(trade.commission || 0))}</Cell>
+                  <Cell selected={isSelected}>{formatCurrency(Number(trade.swaps || 0))}</Cell>
+                  <Cell selected={isSelected}>{formatCurrency(Number(trade.fees || 0))}</Cell>
                   {extraColumns.map((key) => {
                     const { value, className } = renderExtraCell(trade, key, isSelected);
                     return (
