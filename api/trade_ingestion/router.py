@@ -231,14 +231,7 @@ def _trade_from_csv_row(
     exit_reason = _pick(normalized, "exit_reason", "reason") or "csv_import"
 
     if entry_price is None:
-        pnl = _as_optional_float(_pick(normalized, "net_pnl", "pnl"))
-        if pnl is None:
-            raise ValueError("entry_price required")
-        entry_price = 1.0
-        if side == "buy":
-            exit_price_raw = str(entry_price + (pnl / max(quantity, 1.0)))
-        else:
-            exit_price_raw = str(entry_price - (pnl / max(quantity, 1.0)))
+        raise ValueError("entry_price required — cannot derive P&L from CSV's NET PNL column, must calculate from price difference")
 
     trade = Trade.from_dict({
         "account_id": account_id,

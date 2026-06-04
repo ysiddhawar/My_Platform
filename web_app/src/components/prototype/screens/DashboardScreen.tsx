@@ -796,12 +796,13 @@ function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: nu
   const returns = buildReturns(trades, startingCapital);
   const netPnls = closed.map((trade) => Number(trade.net_pnl || 0));
   const wins = netPnls.filter((value) => value > 0);
-  const losses = netPnls.filter((value) => value <= 0);
+  const losses = netPnls.filter((value) => value < 0);
+  const breakevens = netPnls.filter((value) => value === 0);
   const avgWin = average(wins);
   const avgLoss = average(losses);
   const payoffRatio = losses.length && avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
-  const grossProfit = wins.reduce((sum, value) => sum + value, 0);
-  const grossLoss = Math.abs(losses.reduce((sum, value) => sum + value, 0));
+  const netWinningPnL = wins.reduce((sum, value) => sum + value, 0);
+  const netLosingPnL = Math.abs(losses.reduce((sum, value) => sum + value, 0));
   const returnsStd = sampleStd(returns);
   const downside = downsideDeviation(returns);
   const rollingSharpeSeries = rollingWindow(returns, Math.min(20, Math.max(10, Math.floor(returns.length / 5) || 10)), (window) => {
@@ -899,16 +900,16 @@ function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: nu
     average_win: avgWin,
     average_loss: avgLoss,
     payoff_ratio: payoffRatio,
-    profit_factor: grossLoss > 0 ? grossProfit / grossLoss : 0,
+    profit_factor: netLosingPnL > 0 ? netWinningPnL / netLosingPnL : 0,
     expectancy: closed.length ? average(netPnls) : 0,
     cost_summary: {
-      total_brokerage: trades.reduce((sum, trade) => sum + Number(trade.commission || 0) + Number(trade.fees || 0), 0),
-      total_slippage: trades.reduce((sum, trade) => sum + Number(trade.slippage_cost || 0), 0),
-      total_swaps: trades.reduce((sum, trade) => sum + Number(trade.swaps || 0), 0),
-      total_cost: trades.reduce((sum, trade) => sum + Number(trade.total_cost || Number(trade.commission || 0) + Number(trade.fees || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0)), 0),
+      total_brokerage: closed.reduce((sum, trade) => sum + Number(trade.commission || 0) + Number(trade.fees || 0), 0),
+      total_slippage: closed.reduce((sum, trade) => sum + Number(trade.slippage_cost || 0), 0),
+      total_swaps: closed.reduce((sum, trade) => sum + Number(trade.swaps || 0), 0),
+      total_cost: closed.reduce((sum, trade) => sum + Number(trade.total_cost || Number(trade.commission || 0) + Number(trade.fees || 0) + Number(trade.swaps || 0) + Number(trade.slippage_cost || 0)), 0),
     },
     adjusted_pnl: {
-      total_net_pnl: trades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0),
+      total_net_pnl: closed.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0),
       cumulative_net_curve: closed.reduce<number[]>((rows, trade) => {
         const previous = rows[rows.length - 1] || 0;
         rows.push(previous + Number(trade.net_pnl || 0));
@@ -1105,9 +1106,10 @@ function buildGroupVisuals(
         <VisualCard title="Outcome Mix" className="h-[300px]" highlighted={focusedChartTitle === 'Outcome Mix'} cardRef={registerChartRef?.('Outcome Mix')}>
           <PieMetricChart 
             data={[
-              { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
-              { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) <= 0).length },
-            ]} 
+                                  { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
+                                  { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
+                                  { name: 'Breakeven', value: closed.filter((trade) => Number(trade.net_pnl || 0) === 0).length },
+                                ]} 
             className="h-[300px]"
           />
         </VisualCard>
@@ -1567,18 +1569,17 @@ function TopFoldPanel({
 }
 
 function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string; net: number; cumulative: number }> }) {
-  const dailyRange = Math.max(...data.map((row) => Math.abs(row.net)), 1);
-  const cumulativeRange = Math.max(...data.map((row) => Math.abs(row.cumulative)), 1);
-  const scale = cumulativeRange > 0 ? cumulativeRange / dailyRange : 1;
-  const chartData = data.map((row) => ({
-    ...row,
-    dailyScaled: row.net * scale,
-  }));
+  const dailyAbs = data.map((row) => Math.abs(row.net));
+  const dailyMax = dailyAbs.length ? Math.max(...dailyAbs, 1) : 1;
+  const cumulativeAbs = data.map((row) => Math.abs(row.cumulative));
+  const cumulativeMax = cumulativeAbs.length ? Math.max(...cumulativeAbs, 1) : 1;
+  const dailyDomain = [-dailyMax, dailyMax] as [number, number];
+  const cumulativeDomain = [-cumulativeMax, cumulativeMax] as [number, number];
 
   return (
     <ChartFrame className="h-[320px]">
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={chartData} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
           <defs>
             <linearGradient id="pnlFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#2d8659" stopOpacity={0.32} />
@@ -1588,10 +1589,23 @@ function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string;
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.16)" vertical={false} />
           <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} minTickGap={24} />
           <YAxis
-            stroke="#64748b"
+            yAxisId="daily"
+            orientation="left"
+            stroke="#0066FF"
             tickLine={false}
             axisLine={false}
             width={72}
+            domain={dailyDomain}
+            tickFormatter={(value) => formatCompactCurrencyTick(Number(value))}
+          />
+          <YAxis
+            yAxisId="cumulative"
+            orientation="right"
+            stroke="#2d8659"
+            tickLine={false}
+            axisLine={false}
+            width={72}
+            domain={cumulativeDomain}
             tickFormatter={(value) => formatCompactCurrencyTick(Number(value))}
           />
           <Tooltip
@@ -1608,8 +1622,8 @@ function FriendlyPnlChart({ data }: { data: Array<{ date: string; label: string;
             height={30}
             wrapperStyle={{ fontSize: 12, paddingBottom: 8 }}
           />
-          <Bar dataKey="dailyScaled" name="daily" barSize={12} radius={[6, 6, 0, 0]} fill="#0066FF" />
-          <Area type="monotone" dataKey="cumulative" stroke="#2d8659" strokeWidth={3} fill="url(#pnlFill)" />
+          <Bar yAxisId="daily" dataKey="net" name="daily" barSize={12} radius={[6, 6, 0, 0]} fill="#0066FF" />
+          <Area yAxisId="cumulative" type="monotone" dataKey="cumulative" stroke="#2d8659" strokeWidth={3} fill="url(#pnlFill)" />
         </ComposedChart>
       </ResponsiveContainer>
     </ChartFrame>
@@ -1670,6 +1684,26 @@ function longestStreak(values: number[], predicate: (value: number) => boolean):
     }
   });
   return max;
+}
+
+function computeStreaks(values: number[]): { winStreak: number; lossStreak: number } {
+  let winStreak = 0;
+  let lossStreak = 0;
+  let currentWin = 0;
+  let currentLoss = 0;
+  values.forEach((value) => {
+    if (value > 0) {
+      currentWin += 1;
+      winStreak = Math.max(winStreak, currentWin);
+      currentLoss = 0;
+    } else if (value < 0) {
+      currentLoss += 1;
+      lossStreak = Math.max(lossStreak, currentLoss);
+      currentWin = 0;
+    }
+    // breakeven (value === 0): neither streak resets nor extends
+  });
+  return { winStreak, lossStreak };
 }
 
 function classifyBucket(value: number, low: number, high: number): 'low' | 'medium' | 'high' {
@@ -1905,15 +1939,16 @@ export function DashboardScreen() {
     const closedPnls = closed.map((trade) => Number(trade.net_pnl || 0));
     const returns = buildReturns(trades, startingCapital);
     const winTrades = closed.filter((trade) => Number(trade.net_pnl || 0) > 0);
-    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) <= 0);
+    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
+    const beTrades = closed.filter((trade) => Number(trade.net_pnl || 0) === 0);
     const wins = winTrades.length;
     const losses = lossTrades.length;
     const openTrades = trades.filter((trade) => !trade.is_closed).length;
     const avgWin = average(winTrades.map((trade) => Number(trade.net_pnl || 0)));
     const avgLoss = average(lossTrades.map((trade) => Number(trade.net_pnl || 0)));
-    const grossProfit = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
-    const grossLoss = Math.abs(lossTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0));
-    const totalNet = trades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
+    const netWinningPnL = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
+    const netLosingPnL = Math.abs(lossTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0));
+    const totalNet = closed.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
     const tradeDays = new Set(trades.map((trade) => trade.entry_date || trade.entry_time?.slice(0, 10)).filter(Boolean));
     const totalMinutes = (filteredData?.sessionDailyTotals || [])
       .filter((row) => tradeDays.size === 0 || tradeDays.has(row.day))
@@ -1928,8 +1963,7 @@ export function DashboardScreen() {
     const avgLossHoldMinutes = average(lossTrades.map((trade) => minutesBetween(trade.entry_time, trade.exit_time)));
     const topWin = winTrades.length ? Math.max(...winTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
     const topLoss = lossTrades.length ? Math.min(...lossTrades.map((trade) => Number(trade.net_pnl || 0))) : 0;
-    const winStreak = longestStreak(closedPnls, (value) => value > 0);
-    const lossStreak = longestStreak(closedPnls, (value) => value <= 0);
+    const { winStreak, lossStreak } = computeStreaks(closedPnls);
     const sizedTrades = trades.filter((trade) => Number.isFinite(Number(trade.quantity || trade.lot_size || 0)) && Number(trade.quantity || trade.lot_size || 0) > 0);
     const avgSize = average(sizedTrades.map((trade) => Number(trade.quantity || trade.lot_size || 0)));
     const dayVolume = new Map<string, number>();
@@ -1940,11 +1974,11 @@ export function DashboardScreen() {
     });
     const avgDailyVolume = average(Array.from(dayVolume.values()));
     const expectancy = closed.length ? average(closedPnls) : 0;
-    const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : 0;
+    const profitFactor = netLosingPnL > 0 ? netWinningPnL / netLosingPnL : 0;
     const payoffRatio = avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
 
     return {
-      tradeCount: trades.length,
+      tradeCount: closed.length,
       winCount: wins,
       lossCount: losses,
       openCount: openTrades,
@@ -1970,6 +2004,7 @@ export function DashboardScreen() {
       topLoss,
       winStreak,
       lossStreak,
+      beCount: closed.length - wins - losses,
       avgDailyVolume,
       avgSize,
     };
@@ -2394,10 +2429,16 @@ export function DashboardScreen() {
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-black/50 dark:text-white/50">Wins vs Losses Percentage</p>
                 <div className="mt-3">
                   <PieMetricChart
-                    data={[
-                      { name: 'Wins', value: metrics.winCount + metrics.lossCount > 0 ? metrics.winRate * 100 : 0 },
-                      { name: 'Losses', value: metrics.winCount + metrics.lossCount > 0 ? (1 - metrics.winRate) * 100 : 0 },
-                    ]}
+                    data={(() => {
+                      const beCount = metrics.tradeCount - metrics.winCount - metrics.lossCount;
+                      const effectiveTotal = metrics.winCount + metrics.lossCount + beCount;
+                      if (effectiveTotal === 0) return [];
+                      return [
+                        { name: 'Wins', value: (metrics.winCount / effectiveTotal) * 100 },
+                        { name: 'Losses', value: (metrics.lossCount / effectiveTotal) * 100 },
+                        { name: 'Breakeven', value: (beCount / effectiveTotal) * 100 },
+                      ];
+                    })()}
                     colors={['#10b981', '#ef4444']}
                     valueFormatter={(value) => `${value.toFixed(1)}%`}
                     tooltipFormatter={(value, name) => [`${value.toFixed(1)}%`, name]}
@@ -2409,6 +2450,7 @@ export function DashboardScreen() {
                 items={[
                   { label: 'Wins', value: metrics.winCount, tone: 'good' },
                   { label: 'Losses', value: metrics.lossCount, tone: 'risk' },
+                  { label: 'Breakeven', value: metrics.beCount || 0, tone: 'neutral' },
                   { label: 'Open', value: metrics.openCount, tone: 'neutral' },
                 ]}
                 formatter={(value) => formatNumber(value)}
