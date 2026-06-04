@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { TradeRecord } from '@/types/prototype';
-import { formatCurrency, formatDate, formatNumber, formatRatio } from '@/utils/format';
+import { formatCurrency, formatDate, formatNumber, formatRatio, formatTime } from '@/utils/format';
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -82,7 +82,17 @@ function loadExtraColumns(): ColumnKey[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as ColumnKey[]) : [];
+    const keys = raw ? (JSON.parse(raw) as ColumnKey[]) : [];
+    // Normalize to EXTRA_COLUMNS order to prevent header/cell misalignment
+    const extraKeys = new Set(EXTRA_COLUMNS.filter(c => keys.includes(c.key)).map(c => c.key));
+    const staleKeys = keys.filter(k => !extraKeys.has(k));
+    if (staleKeys.length > 0) {
+      // Persist cleaned set immediately
+      const cleaned = EXTRA_COLUMNS.filter(c => keys.includes(c.key)).map(c => c.key);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      return cleaned;
+    }
+    return EXTRA_COLUMNS.filter(col => keys.includes(col.key)).map(col => col.key);
   } catch {
     return [];
   }
@@ -111,10 +121,11 @@ function computeHoldTime(entryTime: string, exitTime: string | null | undefined)
 
 
 function formatChangePercent(trade: TradeRecord): string {
-  const pnl = Number(trade.net_pnl || 0);
-  if (!trade.risk_amount || Number(trade.risk_amount) <= 0 || !Number.isFinite(pnl)) return '—';
-  const pct = (pnl / Number(trade.risk_amount)) * 100;
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  const entry = Number(trade.entry_price || 0);
+  const exit = trade.exit_price != null ? Number(trade.exit_price) : null;
+  if (!entry || exit == null) return '—';
+  const change = ((exit - entry) / entry) * 100;
+  return `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
 }
 
 function formatNetROI(trade: TradeRecord): string {
@@ -135,7 +146,7 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
     case 'entry_price':
       return { value: formatNumber(Number(trade.entry_price || 0)) };
     case 'entry_time':
-      return { value: trade.entry_time ? formatDate(trade.entry_time, trade.entry_timezone || 'UTC') : '—' };
+      return { value: trade.entry_time ? formatTime(trade.entry_time, trade.entry_timezone || 'UTC') : '—' };
     case 'entry_day':
       return { value: trade.entry_day_of_week || '—' };
     case 'stop_loss':
@@ -145,7 +156,7 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
     case 'exit_price':
       return { value: trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—' };
     case 'exit_time':
-      return { value: trade.exit_time ? formatDate(trade.exit_time, trade.entry_timezone || 'UTC') : '—' };
+      return { value: trade.exit_time ? formatTime(trade.exit_time, trade.entry_timezone || 'UTC') : '—' };
     case 'exit_date':
       return { value: trade.exit_date ? formatDate(trade.exit_date) : '—' };
     case 'exit_day':
@@ -246,7 +257,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
             {trades.map((trade) => {
               const tradeId = trade.trade_id || '—';
               const isSelected = tradeId === selectedTradeId;
-              const pnl = Number(trade.net_pnl || 0);
+              const pnl = Math.round(Number(trade.net_pnl || 0) * 100) / 100;
               const netPnlColor = isSelected
                 ? pnl > 0 ? 'text-emerald-200' : pnl < 0 ? 'text-rose-200' : ''
                 : pnl > 0 ? 'text-emerald-600 dark:text-emerald-300' : pnl < 0 ? 'text-rose-600 dark:text-rose-300' : '';
@@ -270,10 +281,10 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                     isSelected ? 'bg-black text-white dark:bg-[#12142b]' : 'bg-white hover:bg-gray-50/50 dark:bg-[#060606] dark:hover:bg-[#0b0b0b]/50'
                   }`}
                 >
-                  <Cell selected={isSelected}>{trade.entry_time ? formatDate(trade.entry_time, trade.entry_timezone || 'UTC') : '—'}</Cell>
+                  <Cell selected={isSelected}>{trade.entry_date ? formatDate(trade.entry_date, trade.entry_timezone || 'UTC') : '—'}</Cell>
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
                   <Cell selected={isSelected} className={statusColor}>
-                    {!trade.is_closed ? 'Open' : pnl > 0 ? 'Win' : pnl < 0 ? 'Loss' : 'Break Even'}
+                    {!trade.is_closed ? 'Open' : (pnl > 0 ? 'Win' : pnl < 0 ? 'Loss' : 'Break Even')}
                   </Cell>
                   <Cell selected={isSelected} className={netPnlColor}>{formatCurrency(pnl)}</Cell>
                   <Cell selected={isSelected}>
@@ -294,8 +305,8 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.commission || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.swaps || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.fees || 0))}</Cell>
-                  {extraColumns.map((key) => {
-                    const { value, className } = renderExtraCell(trade, key, isSelected);
+                  {allColumns.slice(DEFAULT_COLUMNS.length).map(({ key }) => {
+                    const { value, className } = renderExtraCell(trade, key as ColumnKey, isSelected);
                     return (
                       <Cell key={key} selected={isSelected} className={className}>
                         {value}

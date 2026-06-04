@@ -328,7 +328,7 @@ class Trade:
         # where commission and swaps are negative for costs.
         # The fill prices already embed any slippage, so no separate slippage deduction.
         self._slippage_cost = self._slippage_at_entry + self._slippage_at_exit
-        self._net_pnl = self._gross_pnl + self._commission + self._swaps
+        self._net_pnl = self._gross_pnl + self._commission + self._swaps + self._fees
 
     def _compute_r_multiple(self):
         if self._risk_amount and self._risk_amount != 0:
