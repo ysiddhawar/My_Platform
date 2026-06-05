@@ -144,6 +144,8 @@ export function PrototypeShell() {
               ? 'px-2 pb-6 pt-0 md:px-3 md:pb-8 md:pt-0 xl:px-4 xl:pb-10 xl:pt-0'
               : activeView === 'ai-insights'
                 ? 'px-0 pb-6 pt-0 md:px-0 md:pb-8 md:pt-0 xl:px-0 xl:pb-10 xl:pt-0'
+                : activeView === 'journal'
+                ? 'px-2 pb-6 pt-2 md:px-3 md:pb-8 md:pt-2 xl:px-4 xl:pb-10 xl:pt-2'
                 : 'px-2 py-6 md:px-3 md:py-8 xl:px-4 xl:py-10'
             }`}
           >
