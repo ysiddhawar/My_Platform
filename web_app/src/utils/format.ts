@@ -82,6 +82,26 @@ export const formatTime = (value?: string | null, timeZone?: string): string => 
   return new Intl.DateTimeFormat('en-US', options).format(date);
 };
 
+export const formatHoldTime = (diffMs: number): string => {
+  if (diffMs < 0) return '0s';
+  const totalSeconds = Math.floor(diffMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (totalSeconds < 60) {
+    return `${seconds}s`;
+  }
+  if (totalSeconds < 3600) {
+    return `${minutes}m ${seconds}s`;
+  }
+  if (totalSeconds < 86400) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${days}d ${hours}h`;
+};
+
 export const formatMinutes = (value: number): string => {
   if (!Number.isFinite(value) || value <= 0) {
     return '0m';

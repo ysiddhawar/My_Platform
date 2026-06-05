@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { TradeRecord } from '@/types/prototype';
-import { formatCurrency, formatDate, formatNumber, formatRatio, formatTime } from '@/utils/format';
+import { formatCurrency, formatDate, formatHoldTime, formatNumber, formatRatio, formatTime } from '@/utils/format';
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -109,13 +109,8 @@ function computeHoldTime(entryTime: string, exitTime: string | null | undefined)
   const exit = new Date(exitTime).getTime();
   if (Number.isNaN(entry) || Number.isNaN(exit)) return '—';
   const diffMs = exit - entry;
-  if (diffMs < 0) return '—';
-  const totalMinutes = Math.round(diffMs / 60000);
-  if (totalMinutes < 60) return `${totalMinutes}m`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${minutes}m`;
+  if (diffMs <= 0) return '—';
+  return formatHoldTime(diffMs);
 }
 
 
