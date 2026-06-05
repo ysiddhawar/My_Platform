@@ -6,6 +6,8 @@ type TradeTableProps = {
   trades: TradeRecord[];
   selectedTradeId: string | null;
   onSelectTrade: (tradeId: string) => void;
+  isRefetching?: boolean;
+  onRefresh?: () => void;
 };
 
 type ColumnKey =
@@ -185,7 +187,7 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
   }
 }
 
-export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTableProps) {
+export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetching, onRefresh }: TradeTableProps) {
   const [extraColumns, setExtraColumns] = useState<ColumnKey[]>(loadExtraColumns);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
 
@@ -204,8 +206,8 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
 
   return (
     <div className="overflow-hidden rounded-[26px] border border-black/10 bg-white dark:border-white/10 dark:bg-[#060606]">
-      <div className="border-b border-black/8 px-4 py-2 dark:border-white/10">
-        <div className="relative inline-block">
+      <div className="flex items-center justify-between border-b border-black/8 px-4 py-2 dark:border-white/10">
+        <div className="relative">
           <button
             type="button"
             onClick={() => setShowColumnSelector((prev) => !prev)}
@@ -232,6 +234,13 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade }: TradeTabl
             </div>
           )}
         </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          className="inline-flex items-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-white hover:shadow-[0_10px_24px_-18px_rgba(255,89,0,0.28),0_0_0_1px_rgba(255,89,0,0.26)] dark:bg-white dark:text-black dark:hover:text-black"
+        >
+          {isRefetching ? 'Refreshing…' : 'Refresh'}
+        </button>
       </div>
 
       <div className="overflow-x-auto">

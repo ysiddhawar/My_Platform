@@ -29,33 +29,17 @@ export function JournalScreen() {
   }, [data, searchedData, searchText]);
 
   return (
-    <div className="space-y-6 text-black dark:text-white">
-      <div className="space-y-2">
-        <section className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-xl">
-            <label htmlFor="trade-search" className="mb-2 block text-sm font-medium text-black/80 dark:text-white/80">
-              Search
-            </label>
-            <input
-              id="trade-search"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              placeholder="Search by symbol, strategy, notes, or trade id"
-              className="w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm text-black outline-none transition placeholder:text-gray-400 hover:border-[#ff5900] focus:border-black focus:bg-black focus:text-white dark:border-white/10 dark:bg-[#090909] dark:text-white dark:placeholder:text-slate-500 dark:hover:border-[#ff5900] dark:focus:border-white dark:focus:bg-white dark:focus:text-black"
-            />
-          </div>
-          <div className="text-sm text-black/65 dark:text-white/65">
-            {isSearching ? 'Searching…' : `${trades.length} trade${trades.length === 1 ? '' : 's'}`}
-          </div>
-        </section>
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="inline-flex items-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-white hover:shadow-[0_10px_24px_-18px_rgba(255,89,0,0.28),0_0_0_1px_rgba(255,89,0,0.26)] dark:bg-white dark:text-black dark:hover:text-black"
-          >
-            {isFetching ? 'Refreshing…' : 'Refresh'}
-          </button>
+    <div className="space-y-2 text-black dark:text-white">
+      <div className="flex items-center justify-between gap-4">
+        <input
+          id="trade-search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+          placeholder="Search by symbol, strategy, notes, or trade id"
+          className="w-full rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm text-black outline-none transition placeholder:text-gray-400 hover:border-[#ff5900] focus:border-black focus:bg-black focus:text-white dark:border-white/10 dark:bg-[#090909] dark:text-white dark:placeholder:text-slate-500 dark:hover:border-[#ff5900] dark:focus:border-white dark:focus:bg-white dark:focus:text-black"
+        />
+        <div className="shrink-0 text-sm text-black/65 dark:text-white/65">
+          {isSearching ? 'Searching…' : `${trades.length} trade${trades.length === 1 ? '' : 's'}`}
         </div>
       </div>
 
@@ -68,7 +52,13 @@ export function JournalScreen() {
       ) : null}
 
       {trades.length > 0 ? (
-        <TradeTable trades={trades} selectedTradeId={selectedTradeId} onSelectTrade={selectTrade} />
+        <TradeTable
+          trades={trades}
+          selectedTradeId={selectedTradeId}
+          onSelectTrade={selectTrade}
+          isRefetching={isFetching}
+          onRefresh={() => void refetch()}
+        />
       ) : null}
     </div>
   );
