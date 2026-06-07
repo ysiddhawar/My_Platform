@@ -201,7 +201,6 @@ export type TradeRecord = {
   probability_bucket?: string | null;
   confidence_score?: number | null;
   emotion_tag?: string | null;
-  close_classification?: string | null;
   closed_before_plan?: boolean;
   minimum_target_price?: number | null;
   minimum_target_reward?: number | null;

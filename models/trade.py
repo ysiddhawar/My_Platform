@@ -91,7 +91,6 @@ class Trade:
         "_line_history",
         "_minimum_target_price",
         "_minimum_target_reward",
-        "_close_classification",
         "_closed_before_plan",
         "_notes",
 
@@ -143,7 +142,6 @@ class Trade:
         line_history: Optional[List[Dict[str, Any]]] = None,
         minimum_target_price: Optional[float] = None,
         minimum_target_reward: Optional[float] = None,
-        close_classification: Optional[str] = None,
         closed_before_plan: bool = False,
         notes: Optional[str] = None,
         volatility_regime_at_entry: Optional[str] = None,
@@ -216,7 +214,6 @@ class Trade:
         self._line_history = list(line_history or [])
         self._minimum_target_price = minimum_target_price
         self._minimum_target_reward = minimum_target_reward
-        self._close_classification = close_classification
         self._closed_before_plan = bool(closed_before_plan)
         self._notes = notes
 
@@ -282,7 +279,6 @@ class Trade:
         checklist_after: Optional[List[str]] = None,
         probability_bucket: Optional[str] = None,
         post_trade_capture: Optional[Dict[str, Any]] = None,
-        close_classification: Optional[str] = None,
         notes: Optional[str] = None,
         exit_time: Optional[datetime] = None,
     ):
@@ -303,7 +299,6 @@ class Trade:
             self._probability_bucket = probability_bucket
         if post_trade_capture:
             self._post_trade_capture = dict(post_trade_capture)
-        self._close_classification = close_classification or self._classify_close(exit_reason)
         self._closed_before_plan = self._is_closed_before_plan(exit_price)
         if notes:
             self._notes = notes
@@ -363,7 +358,6 @@ class Trade:
         checklist_after: Optional[List[str]] = None,
         probability_bucket: Optional[str] = None,
         post_trade_capture: Optional[Dict[str, Any]] = None,
-        close_classification: Optional[str] = None,
         notes: Optional[str] = None,
     ):
         coerced_exit_time = self._coerce_datetime(exit_time)
@@ -374,7 +368,6 @@ class Trade:
             checklist_after=checklist_after,
             probability_bucket=probability_bucket,
             post_trade_capture=post_trade_capture,
-            close_classification=close_classification,
             notes=notes,
             exit_time=coerced_exit_time,
         )
@@ -497,7 +490,6 @@ class Trade:
         checklist_after: Optional[List[str]] = None,
         probability_bucket: Optional[str] = None,
         post_trade_capture: Optional[Dict[str, Any]] = None,
-        close_classification: Optional[str] = None,
         notes: Optional[str] = None,
         line_snapshot: Optional[Dict[str, Any]] = None,
         metadata_update: Optional[Dict[str, Any]] = None,
@@ -536,7 +528,6 @@ class Trade:
             checklist_after=checklist_after,
             probability_bucket=probability_bucket,
             post_trade_capture=post_trade_capture,
-            close_classification=close_classification,
             notes=notes,
         )
 
@@ -595,7 +586,6 @@ class Trade:
             line_history=payload.get("line_history"),
             minimum_target_price=payload.get("minimum_target_price"),
             minimum_target_reward=payload.get("minimum_target_reward"),
-            close_classification=payload.get("close_classification"),
             closed_before_plan=payload.get("closed_before_plan", False),
             notes=payload.get("notes"),
             metadata=payload.get("metadata"),
@@ -620,7 +610,6 @@ class Trade:
                 checklist_after=payload.get("checklist_after"),
                 probability_bucket=payload.get("probability_bucket"),
                 post_trade_capture=payload.get("post_trade_capture"),
-                close_classification=payload.get("close_classification"),
                 notes=payload.get("notes"),
                 exit_time=cls._coerce_datetime(payload.get("exit_time")),
             )
@@ -724,7 +713,6 @@ class Trade:
             "line_history": self._line_history,
             "minimum_target_price": self._minimum_target_price,
             "minimum_target_reward": self._minimum_target_reward,
-            "close_classification": self._close_classification,
             "closed_before_plan": self._closed_before_plan,
             "notes": self._notes,
 
@@ -749,7 +737,6 @@ class Trade:
                 "exit_price": self._exit_price,
                 "exit_time": self._exit_time.isoformat() if self._exit_time else None,
                 "exit_reason": self._exit_reason,
-                "close_classification": self._close_classification,
                 "closed_before_plan": self._closed_before_plan,
             } if self._exit_time else None,
             "economics": {

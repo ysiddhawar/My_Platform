@@ -227,7 +227,6 @@ def _trade_from_csv_row(
     slippage_cost = _as_optional_float(_pick(normalized, "slippage_cost", "slippage")) or 0.0
     probability_bucket = _pick(normalized, "probability_bucket", "probability")
     notes = _pick(normalized, "notes", "comment")
-    close_classification = _pick(normalized, "close_classification")
     exit_reason = _pick(normalized, "exit_reason", "reason") or "csv_import"
 
     if entry_price is None:
@@ -273,7 +272,6 @@ def _trade_from_csv_row(
             exit_reason=exit_reason,
             slippage_at_exit=0.0,
             probability_bucket=probability_bucket,
-            close_classification=close_classification,
             notes=notes,
         )
     return trade

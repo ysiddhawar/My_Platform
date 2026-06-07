@@ -192,7 +192,6 @@ class TradeListener:
                     checklist_after=payload.get("selected_checklist") or payload.get("checklist_after"),
                     probability_bucket=payload.get("probability_bucket"),
                     post_trade_capture=payload.get("post_trade_capture"),
-                    close_classification=payload.get("close_classification"),
                     notes=payload.get("notes"),
                 )
                 line_snapshot = payload.get("line_snapshot")
@@ -224,7 +223,6 @@ class TradeListener:
                     checklist_after=payload.get("selected_checklist") or payload.get("checklist_after"),
                     probability_bucket=payload.get("probability_bucket"),
                     post_trade_capture=payload.get("post_trade_capture"),
-                    close_classification=payload.get("close_classification"),
                     notes=payload.get("notes"),
                 )
                 line_snapshot = payload.get("line_snapshot")
@@ -368,7 +366,6 @@ class TradeListener:
             checklist_after=payload.get("selected_checklist") or payload.get("checklist_after"),
             probability_bucket=payload.get("probability_bucket"),
             post_trade_capture=payload.get("post_trade_capture"),
-            close_classification=payload.get("close_classification"),
             notes=payload.get("notes"),
             line_snapshot=payload.get("line_snapshot"),
             metadata_update={"last_partial_close": payload},

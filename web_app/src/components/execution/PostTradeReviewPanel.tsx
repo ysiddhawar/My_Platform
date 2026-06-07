@@ -72,7 +72,7 @@ export function PostTradeReviewPanel() {
   });
 
   return (
-    <Panel title="Post-Trade Capture" subtitle="Record post-trade discipline, notes, and close classification">
+    <Panel title="Post-Trade Capture" subtitle="Record post-trade discipline, notes, and exit classification">
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="text-sm text-slate-300">
           Trade

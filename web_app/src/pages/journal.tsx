@@ -8,7 +8,6 @@ type JournalTrade = {
   trade_id: string;
   symbol: string;
   setup_name: string;
-  close_classification?: string;
   is_closed: boolean;
   net_pnl?: number;
   pre_trade_capture?: Record<string, unknown>;
@@ -41,7 +40,7 @@ export default function JournalPage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{trade.trade_id}</p>
                 </div>
                 <div className="text-right text-sm text-slate-300">
-                  <p>{trade.close_classification || (trade.is_closed ? 'closed' : 'open')}</p>
+                  <p>{trade.is_closed ? 'closed' : 'open'}</p>
                   <p className="text-xs text-slate-500">Net PnL: {trade.net_pnl ?? '--'}</p>
                 </div>
               </div>

@@ -560,7 +560,6 @@ def _save_demo_trade(
                     "selected_checklist": rng.sample(checklist_items, k=rng.randint(1, len(checklist_items))),
                     "notes": rng.choice([None, "Closed at plan.", "Held through pullback.", "Took manual exit near target."]),
                 },
-                "close_classification": "target_hit" if outcome == "win" else ("stop_hit" if outcome == "loss" else "manual_exit"),
             }
         )
 

@@ -62,7 +62,6 @@ class CloseTradeRequest(BaseModel):
     selected_checklist: Optional[list[str]] = None
     strategy_setup: Optional[str] = None
     notes: Optional[str] = None
-    close_classification: Optional[str] = None
     slippage_at_exit: float = 0.0
     line_snapshot: Optional[Dict[str, Any]] = None
 

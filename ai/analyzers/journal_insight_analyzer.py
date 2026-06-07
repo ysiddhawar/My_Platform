@@ -235,7 +235,7 @@ class JournalInsightAnalyzer:
 
     def _first_early_exit_trade_id(self, closed: List[Dict[str, Any]]) -> str | None:
         for trade in closed:
-            if trade.get("closed_before_plan") or str(trade.get("close_classification") or "").lower() == "early":
+            if trade.get("closed_before_plan"):
                 trade_id = str(trade.get("trade_id") or "")
                 if trade_id:
                     return trade_id

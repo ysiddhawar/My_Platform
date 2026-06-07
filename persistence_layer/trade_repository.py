@@ -368,7 +368,6 @@ class TradeRepository:
             "exit_price": exit_price,
             "exit_time": exit_details.get("exit_time") or record["updated_at"],
             "exit_reason": computed_exit_reason or exit_details.get("exit_reason"),
-            "close_classification": computed_status or exit_details.get("close_classification"),
             "closed_before_plan": exit_details.get("closed_before_plan", False),
             "gross_pnl": economics.get("gross_pnl"),
             "net_pnl": net_pnl,

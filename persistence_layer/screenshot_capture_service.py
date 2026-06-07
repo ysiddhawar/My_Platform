@@ -47,7 +47,6 @@ class ScreenshotCaptureService:
                 "stop_loss_at_entry": trade_data.get("stop_loss_at_entry"),
                 "target_at_entry": trade_data.get("target_at_entry"),
                 "exit_price": trade_data.get("exit_price"),
-                "close_classification": trade_data.get("close_classification"),
                 **(metadata or {}),
             },
         )

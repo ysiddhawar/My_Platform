@@ -32,8 +32,7 @@ type ColumnKey =
   | 'confidence_score'
   | 'emotion_tag'
   | 'probability_bucket'
-  | 'closed_before_plan'
-  | 'close_classification';
+  | 'closed_before_plan';
 
 const DEFAULT_COLUMNS: { key: string; label: string }[] = [
   { key: 'entry_date', label: 'Entry Date' },
@@ -75,7 +74,6 @@ const EXTRA_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'emotion_tag', label: 'Emotion' },
   { key: 'probability_bucket', label: 'Probability' },
   { key: 'closed_before_plan', label: 'Closed Early' },
-  { key: 'close_classification', label: 'Close Classification' },
 ];
 
 const STORAGE_KEY = 'my_platform_journal_extra_columns';
@@ -180,8 +178,6 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
       return { value: trade.probability_bucket || '—' };
     case 'closed_before_plan':
       return { value: trade.closed_before_plan ? 'Yes' : 'No' };
-    case 'close_classification':
-      return { value: trade.close_classification || (trade.is_closed ? 'Closed' : 'Open') };
     default:
       return { value: '—' };
   }

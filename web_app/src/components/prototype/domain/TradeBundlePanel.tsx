@@ -26,7 +26,7 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
         <SummaryCard label="Trade ID" value={(trade.trade_id || '').replace(/^mt5_/, '')} helper={`${trade.symbol} · ${trade.market_type || '—'} · ${trade.side}`} />
         <SummaryCard label="Net PnL" value={formatCurrency(Number(trade.net_pnl || 0))} helper={`Gross ${formatCurrency(Number(trade.gross_pnl || 0))} · Cost ${formatCurrency(Number(trade.total_cost || 0))}`} />
         <SummaryCard label="Entry / Exit" value={formatDateTime(trade.entry_time, trade.entry_timezone || 'UTC')} helper={trade.exit_time ? `Exit ${formatDateTime(trade.exit_time, trade.entry_timezone || 'UTC')}` : 'Trade still open'} />
-        <SummaryCard label="Setup" value={(() => { const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null; const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null; return tag || strat || '—'; })()} helper={`${trade.probability_bucket || '—'} · ${trade.close_classification || (trade.is_closed ? 'Closed' : 'Open')}`} />
+        <SummaryCard label="Setup" value={(() => { const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null; const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null; return tag || strat || '—'; })()} helper={`${trade.probability_bucket || '—'} · ${trade.is_closed ? 'Closed' : 'Open'}`} />
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -70,7 +70,6 @@ export function TradeBundlePanel({ bundle }: TradeBundlePanelProps) {
                 ['Exit Date', formatDate(trade.exit_time)],
                 ['Exit Day', trade.exit_day_of_week || '—'],
                 ['Exit Reason', trade.exit_reason || '—'],
-                ['Close Classification', trade.close_classification || '—'],
                 ['Closed Before Plan', trade.closed_before_plan ? 'Yes' : 'No'],
               ]}
             />
