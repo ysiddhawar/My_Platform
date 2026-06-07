@@ -253,8 +253,11 @@ class TradeRepository:
         Determine exit reason based on price action relative to target and stop-loss.
         Returns one of: 'Reached Target', 'Hit Stop-loss', 'Manual Exit', or None.
         """
-        if not is_closed or exit_price is None or stop_loss is None or target is None:
+        if not is_closed or exit_price is None:
             return None
+        if stop_loss is None or target is None:
+            # No stop-loss or target was defined — exit cannot be automated
+            return 'Manual Exit'
 
         side_lower = side.lower() if side else 'buy'
 
@@ -331,13 +334,21 @@ class TradeRepository:
         is_closed = bool(record["is_closed"])
         side = record["side"]
         exit_price = exit_details.get("exit_price")
+        # Normalize 0.0 to None: broker returns 0.0 when stop-loss/target was never set
         stop_loss = entry_details.get("stop_loss_at_entry")
+        if stop_loss is not None and stop_loss == 0.0:
+            stop_loss = None
         target = entry_details.get("target_at_entry")
+        if target is not None and target == 0.0:
+            target = None
         net_pnl = economics.get("net_pnl")
 
         # Compute derived fields (override raw DB values)
         computed_exit_reason = self._compute_exit_reason(
             exit_price, stop_loss, target, side, is_closed
+        )
+        computed_closed_before_plan = (
+            True if computed_exit_reason == 'Manual Exit' else False
         )
         computed_status = self._compute_status(net_pnl, is_closed)
 
@@ -368,7 +379,7 @@ class TradeRepository:
             "exit_price": exit_price,
             "exit_time": exit_details.get("exit_time") or record["updated_at"],
             "exit_reason": computed_exit_reason or exit_details.get("exit_reason"),
-            "closed_before_plan": exit_details.get("closed_before_plan", False),
+            "closed_before_plan": computed_closed_before_plan,
             "gross_pnl": economics.get("gross_pnl"),
             "net_pnl": net_pnl,
             "fees": economics.get("fees", 0.0),

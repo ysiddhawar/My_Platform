@@ -299,7 +299,7 @@ class Trade:
             self._probability_bucket = probability_bucket
         if post_trade_capture:
             self._post_trade_capture = dict(post_trade_capture)
-        self._closed_before_plan = self._is_closed_before_plan(exit_price)
+        self._closed_before_plan = self._is_manual_exit(exit_reason)
         if notes:
             self._notes = notes
 
@@ -333,21 +333,12 @@ class Trade:
     def trade_id(self) -> str:
         return self._trade_id
 
-    def _classify_close(self, exit_reason: str) -> str:
-        normalized = str(exit_reason or "").lower()
-        if normalized in {"target", "take_profit", "target_hit"}:
-            return "target_hit"
-        if normalized in {"stop", "stop_loss", "stop_hit"}:
-            return "stop_hit"
-        if normalized:
-            return "manual_exit"
-        return "unknown"
-
-    def _is_closed_before_plan(self, exit_price: float) -> bool:
-        if self._target_at_entry is None or self._stop_loss_at_entry is None:
+    def _is_manual_exit(self, exit_reason: str) -> bool:
+        """Returns True if the exit was manual (not hitting target or stop)."""
+        normalized = str(exit_reason or "").lower().replace(" ", "_").replace("-", "_")
+        if normalized in {"target_hit", "take_profit", "reached_target", "stop_hit", "stop_loss", "hit_stop_loss"}:
             return False
-        planned_prices = {round(float(self._target_at_entry), 8), round(float(self._stop_loss_at_entry), 8)}
-        return round(float(exit_price), 8) not in planned_prices
+        return True
 
     def close_trade(
         self,
