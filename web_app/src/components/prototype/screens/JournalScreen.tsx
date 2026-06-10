@@ -29,8 +29,8 @@ export function JournalScreen() {
   }, [data, searchedData, searchText]);
 
   return (
-    <div className="space-y-2 text-black dark:text-white">
-      <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-col h-full text-black dark:text-white">
+      <div className="flex items-center justify-between gap-4 flex-shrink-0">
         <input
           id="trade-search"
           value={searchText}
@@ -52,6 +52,7 @@ export function JournalScreen() {
       ) : null}
 
       {trades.length > 0 ? (
+        <div className="flex-1 min-h-0">
         <TradeTable
           trades={trades}
           selectedTradeId={selectedTradeId}
@@ -59,6 +60,7 @@ export function JournalScreen() {
           isRefetching={isFetching}
           onRefresh={() => void refetch()}
         />
+      </div>
       ) : null}
     </div>
   );

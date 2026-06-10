@@ -201,8 +201,8 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
   }, [extraColumns]);
 
   return (
-    <div className="overflow-hidden rounded-[26px] border border-black/10 bg-white dark:border-white/10 dark:bg-[#060606]">
-      <div className="flex items-center justify-between border-b border-black/8 px-4 py-2 dark:border-white/10">
+    <div className="flex flex-col h-full overflow-hidden rounded-[26px] border border-black/10 bg-white dark:border-white/10 dark:bg-[#060606]">
+      <div className="sticky top-0 z-20 bg-white dark:bg-[#060606] flex-shrink-0 flex items-center justify-between border-b border-black/8 px-4 py-2 dark:border-white/10">
         <div className="relative">
           <button
             type="button"
@@ -239,7 +239,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
         </button>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-y-auto overflow-x-auto flex-1 min-h-0">
         <table className="min-w-[1400px] border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50 dark:bg-[#0d0d0d]">
