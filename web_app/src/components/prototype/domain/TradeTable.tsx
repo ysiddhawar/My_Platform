@@ -183,6 +183,19 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
   }
 }
 
+const STATUS_COLORS = {
+  win: '#55B685',
+  loss: '#DD524C',
+  breakeven: '#EAB308',
+} as const;
+
+function getStatusStyle(pnl: number, isClosed: boolean): React.CSSProperties {
+  if (!isClosed) return {};
+  if (pnl > 0) return { color: STATUS_COLORS.win };
+  if (pnl < 0) return { color: STATUS_COLORS.loss };
+  return { color: STATUS_COLORS.breakeven };
+}
+
 export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetching, onRefresh }: TradeTableProps) {
   const [extraColumns, setExtraColumns] = useState<ColumnKey[]>(loadExtraColumns);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
@@ -258,16 +271,13 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
               const tradeId = trade.trade_id || '—';
               const isSelected = tradeId === selectedTradeId;
               const pnl = Math.round(Number(trade.net_pnl || 0) * 100) / 100;
-              const netPnlColor = isSelected
-                ? pnl > 0 ? 'text-emerald-200' : pnl < 0 ? 'text-rose-200' : ''
-                : pnl > 0 ? 'text-emerald-600 dark:text-emerald-300' : pnl < 0 ? 'text-rose-600 dark:text-rose-300' : '';
-              const statusColor = !trade.is_closed
-                ? ''
-                : pnl > 0
-                  ? 'text-[#55B685] font-semibold'
-                  : pnl < 0
-                    ? 'text-[#DD524C] font-semibold'
-                    : '';
+              const statusStyle = getStatusStyle(pnl, trade.is_closed);
+              const pnlStyle = getStatusStyle(pnl, trade.is_closed);
+              const sideStyle = (trade.side || '').toLowerCase() === 'buy'
+                ? { color: STATUS_COLORS.win }
+                : (trade.side || '').toLowerCase() === 'sell'
+                  ? { color: STATUS_COLORS.loss }
+                  : {};
 
               return (
                 <tr
@@ -283,10 +293,10 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                 >
                   <Cell selected={isSelected}>{trade.entry_date ? formatDate(trade.entry_date, trade.entry_timezone || 'UTC') : '—'}</Cell>
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
-                  <Cell selected={isSelected} className={statusColor}>
-                    {!trade.is_closed ? 'Open' : (pnl > 0 ? 'Win' : pnl < 0 ? 'Loss' : 'Break Even')}
+                  <Cell selected={isSelected} className="font-semibold" style={statusStyle}>
+                    {!trade.is_closed ? 'OPEN' : (pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'BREAKEVEN')}
                   </Cell>
-                  <Cell selected={isSelected} className={netPnlColor}>{formatCurrency(pnl)}</Cell>
+                  <Cell selected={isSelected} style={pnlStyle}>{formatCurrency(pnl)}</Cell>
                   <Cell selected={isSelected}>
                     {(() => {
                       const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null;
@@ -294,7 +304,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                       return tag || strat || '—';
                     })()}
                   </Cell>
-                  <Cell selected={isSelected}>{trade.side}</Cell>
+                  <Cell selected={isSelected} style={sideStyle}>{(trade.side || '').toUpperCase()}</Cell>
                   <Cell selected={isSelected}>{computeHoldTime(trade.entry_time, trade.exit_time)}</Cell>
                   <Cell selected={isSelected}>{formatChangePercent(trade)}</Cell>
                   <Cell selected={isSelected}>
@@ -328,17 +338,20 @@ function Cell({
   selected,
   strong = false,
   className = '',
+  style,
 }: {
   children: React.ReactNode;
   selected: boolean;
   strong?: boolean;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
     <td
       className={`border-b border-black/8 px-4 py-3 text-sm ${strong ? 'font-semibold' : ''} ${
         selected ? 'border-white/10 text-white' : 'text-black dark:border-white/10 dark:text-white'
       } ${className}`}
+      style={style}
     >
       {children}
     </td>
