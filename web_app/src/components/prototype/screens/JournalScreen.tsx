@@ -29,7 +29,7 @@ export function JournalScreen() {
   }, [data, searchedData, searchText]);
 
   return (
-    <div className="flex flex-col h-full text-black dark:text-white">
+    <div className="flex flex-col h-full gap-4 text-black dark:text-white">
       <div className="flex items-center justify-between gap-4 flex-shrink-0">
         <input
           id="trade-search"

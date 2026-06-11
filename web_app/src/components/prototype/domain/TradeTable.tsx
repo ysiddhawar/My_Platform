@@ -253,7 +253,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
       </div>
 
       <div className="overflow-y-auto overflow-x-auto flex-1 min-h-0">
-        <table className="min-w-[1400px] border-separate border-spacing-0">
+        <table className="min-w-[1500px] border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50 dark:bg-[#0d0d0d]">
               {allColumns.map(({ key, label }) => (
@@ -348,7 +348,7 @@ function Cell({
 }) {
   return (
     <td
-      className={`border-b border-black/8 px-4 py-3 text-sm ${strong ? 'font-semibold' : ''} ${
+      className={`border-b border-black/8 px-5 py-4 text-sm ${strong ? 'font-semibold' : ''} ${
         selected ? 'border-white/10 text-white' : 'text-black dark:border-white/10 dark:text-white'
       } ${className}`}
       style={style}
