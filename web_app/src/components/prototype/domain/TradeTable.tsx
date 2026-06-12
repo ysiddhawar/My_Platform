@@ -144,10 +144,16 @@ function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean
       return { value: trade.entry_time ? formatTime(trade.entry_time, trade.entry_timezone || 'UTC') : '—' };
     case 'entry_day':
       return { value: trade.entry_day_of_week || '—' };
-    case 'stop_loss':
-      return { value: formatNumber(Number(trade.stop_loss_at_entry || 0)) };
-    case 'target':
-      return { value: formatNumber(Number(trade.target_at_entry || 0)) };
+    case 'stop_loss': {
+      const sl = Number(trade.stop_loss_at_entry);
+      const safe = Number.isFinite(sl) && sl !== 0 ? sl : null;
+      return { value: safe !== null ? formatNumber(safe) : '—' };
+    }
+    case 'target': {
+      const tgt = Number(trade.target_at_entry);
+      const safe = Number.isFinite(tgt) && tgt !== 0 ? tgt : null;
+      return { value: safe !== null ? formatNumber(safe) : '—' };
+    }
     case 'exit_price':
       return { value: trade.exit_price != null ? formatNumber(Number(trade.exit_price)) : '—' };
     case 'exit_time':
