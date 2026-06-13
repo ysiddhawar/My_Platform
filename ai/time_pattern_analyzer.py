@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.trade_outcome import classify_trade_outcome
 from models.ai_diagnosis import DiagnosticFinding
 
 
@@ -180,9 +181,10 @@ class TimePatternAnalyzer:
             bucket = buckets[hour]
             bucket["trade_count"] += 1
             bucket["net_pnl"] += pnl
-            if pnl > 0:
+            outcome = classify_trade_outcome(pnl, bool(trade.get("is_closed", True)))
+            if outcome == "win":
                 bucket["wins"] += 1
-            elif pnl < 0:
+            elif outcome == "loss":
                 bucket["losses"] += 1
         return {
             self._hour_label(hour): {
@@ -204,9 +206,10 @@ class TimePatternAnalyzer:
             bucket = buckets[str(day)]
             bucket["trade_count"] += 1
             bucket["net_pnl"] += pnl
-            if pnl > 0:
+            outcome = classify_trade_outcome(pnl, bool(trade.get("is_closed", True)))
+            if outcome == "win":
                 bucket["wins"] += 1
-            elif pnl < 0:
+            elif outcome == "loss":
                 bucket["losses"] += 1
         return {
             day: {

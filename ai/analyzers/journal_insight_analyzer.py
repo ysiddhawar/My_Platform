@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from ai.insight_scoring import build_evidence, make_finding, make_recommendation
 from ai.insights_models import InsightDrilldown, InsightFinding, Recommendation
+from core.trade_outcome import is_loss
 
 
 class JournalInsightAnalyzer:
@@ -222,8 +223,7 @@ class JournalInsightAnalyzer:
         current_streak: List[Dict[str, Any]] = []
         best_streak: List[Dict[str, Any]] = []
         for trade in ordered:
-            pnl = float(trade.get("net_pnl") or 0.0)
-            if pnl < 0:
+            if is_loss(trade.get("net_pnl"), bool(trade.get("is_closed", True))):
                 current_streak.append(trade)
                 if len(current_streak) >= len(best_streak):
                     best_streak = list(current_streak)

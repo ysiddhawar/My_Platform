@@ -7,6 +7,7 @@ import { CalendarMonthGrid } from '@/components/prototype/domain/CalendarMonthGr
 import type { CalendarDaySummary, TradeRecord } from '@/types/prototype';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import { formatCurrency } from '@/utils/format';
+import { summarizeTradeOutcomes } from '@/utils/tradeOutcome';
 
 export function CalendarScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
@@ -119,8 +120,8 @@ export function CalendarScreen() {
     return Object.fromEntries(
       Array.from(map.entries()).map(([day, entries]) => {
         const closed = entries.filter((trade) => trade.is_closed);
-        const wins = closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length;
-        const winRate = closed.length ? wins / closed.length : 0;
+        const outcomeSummary = summarizeTradeOutcomes(closed);
+        const winRate = outcomeSummary.winRate;
         const rMultiple = closed.reduce((sum, trade) => sum + resolveTradeRMultiple(trade), 0);
         return [day, { rMultiple, winRate }];
       }),

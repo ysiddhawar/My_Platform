@@ -18,6 +18,7 @@ import { getMetricIcon } from '@/components/prototype/MetricVisualMapping';
 import type { DashboardChartContract, OverviewData, TradeRecord } from '@/types/prototype';
 import { defaultDashboardFilters, defaultDashboardGroupOrder, usePrototypeStore } from '@/state/prototypeStore';
 import { formatCompactNumber, formatCurrency, formatDate, formatMinutes, formatNumber, formatPercent, formatRatio, humanizeKey } from '@/utils/format';
+import { classifyPnlOutcome, isWinningTrade, summarizeTradeOutcomes, tradeNetPnl } from '@/utils/tradeOutcome';
 
 type MetricSection = {
   title: string;
@@ -794,10 +795,11 @@ function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: nu
   const trades = data?.trades || [];
   const closed = chronologicalClosedTrades(trades);
   const returns = buildReturns(trades, startingCapital);
-  const netPnls = closed.map((trade) => Number(trade.net_pnl || 0));
-  const wins = netPnls.filter((value) => value > 0);
-  const losses = netPnls.filter((value) => value < 0);
-  const breakevens = netPnls.filter((value) => value === 0);
+  const outcomeSummary = summarizeTradeOutcomes(closed);
+  const netPnls = closed.map(tradeNetPnl);
+  const wins = outcomeSummary.winTrades.map(tradeNetPnl);
+  const losses = outcomeSummary.lossTrades.map(tradeNetPnl);
+  const breakevens = outcomeSummary.breakevenTrades.map(tradeNetPnl);
   const avgWin = average(wins);
   const avgLoss = average(losses);
   const payoffRatio = losses.length && avgLoss !== 0 ? Math.abs(avgWin / avgLoss) : 0;
@@ -854,7 +856,7 @@ function buildDerivedMetrics(data: OverviewData | undefined, startingCapital: nu
     const key = String(trade.setup_name || trade.strategy || trade.strategy_tag || 'Unspecified');
     const bucket = setupBuckets.get(key) || { wins: 0, total: 0 };
     bucket.total += 1;
-    if (Number(trade.net_pnl || 0) > 0) bucket.wins += 1;
+    if (isWinningTrade(trade)) bucket.wins += 1;
     setupBuckets.set(key, bucket);
   });
   const regimeBase = rollingVolSeries.length ? rollingVolSeries : returns.map((_, index) => sampleStd(returns.slice(Math.max(0, index - 9), index + 1)));
@@ -1031,6 +1033,7 @@ function buildGroupVisuals(
 ) {
   const trades = overview?.trades || [];
   const closed = chronologicalClosedTrades(trades);
+  const outcomeSummary = summarizeTradeOutcomes(closed);
   const returns = buildReturns(trades, startingCapital);
   const book = buildBookMatrix(trades, returns);
   const covariance = covarianceMatrix(book.matrix);
@@ -1106,10 +1109,10 @@ function buildGroupVisuals(
         <VisualCard title="Outcome Mix" className="h-[300px]" highlighted={focusedChartTitle === 'Outcome Mix'} cardRef={registerChartRef?.('Outcome Mix')}>
           <PieMetricChart 
             data={[
-                                  { name: 'Winning Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) > 0).length },
-                                  { name: 'Losing Trades', value: closed.filter((trade) => Number(trade.net_pnl || 0) < 0).length },
-                                  { name: 'Breakeven', value: closed.filter((trade) => Number(trade.net_pnl || 0) === 0).length },
-                                ]} 
+              { name: 'Winning Trades', value: outcomeSummary.winCount },
+              { name: 'Losing Trades', value: outcomeSummary.lossCount },
+              { name: 'Breakeven', value: outcomeSummary.breakevenCount },
+            ]} 
             className="h-[300px]"
           />
         </VisualCard>
@@ -1692,16 +1695,17 @@ function computeStreaks(values: number[]): { winStreak: number; lossStreak: numb
   let currentWin = 0;
   let currentLoss = 0;
   values.forEach((value) => {
-    if (value > 0) {
+    const outcome = classifyPnlOutcome(value, true);
+    if (outcome === 'win') {
       currentWin += 1;
       winStreak = Math.max(winStreak, currentWin);
       currentLoss = 0;
-    } else if (value < 0) {
+    } else if (outcome === 'loss') {
       currentLoss += 1;
       lossStreak = Math.max(lossStreak, currentLoss);
       currentWin = 0;
     }
-    // breakeven (value === 0): neither streak resets nor extends
+    // Breakeven trades do not extend either streak.
   });
   return { winStreak, lossStreak };
 }
@@ -1938,12 +1942,11 @@ export function DashboardScreen() {
     const closed = chronologicalClosedTrades(trades);
     const closedPnls = closed.map((trade) => Number(trade.net_pnl || 0));
     const returns = buildReturns(trades, startingCapital);
-    const winTrades = closed.filter((trade) => Number(trade.net_pnl || 0) > 0);
-    const lossTrades = closed.filter((trade) => Number(trade.net_pnl || 0) < 0);
-    const beTrades = closed.filter((trade) => Number(trade.net_pnl || 0) === 0);
-    const wins = winTrades.length;
-    const losses = lossTrades.length;
-    const openTrades = trades.filter((trade) => !trade.is_closed).length;
+    const outcomeSummary = summarizeTradeOutcomes(trades);
+    const { winTrades, lossTrades, breakevenTrades } = outcomeSummary;
+    const wins = outcomeSummary.winCount;
+    const losses = outcomeSummary.lossCount;
+    const openTrades = outcomeSummary.openCount;
     const avgWin = average(winTrades.map((trade) => Number(trade.net_pnl || 0)));
     const avgLoss = average(lossTrades.map((trade) => Number(trade.net_pnl || 0)));
     const netWinningPnL = winTrades.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0);
@@ -2004,7 +2007,7 @@ export function DashboardScreen() {
       topLoss,
       winStreak,
       lossStreak,
-      beCount: closed.length - wins - losses,
+      beCount: breakevenTrades.length,
       avgDailyVolume,
       avgSize,
     };

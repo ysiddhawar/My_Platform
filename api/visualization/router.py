@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from core.trade_outcome import is_loss, is_win
 from visualization.performance_dashboard import PerformanceDashboard
 from visualization.portfolio_dashboard import PortfolioDashboard
 
@@ -276,8 +277,8 @@ def build_dashboard_contracts(request: DashboardChartContractsRequest):
         [trade for trade in trades if trade.get("is_closed")],
         key=_trade_close_timestamp,
     )
-    wins = [trade for trade in closed if _num(trade.get("net_pnl")) > 0]
-    losses = [trade for trade in closed if _num(trade.get("net_pnl")) <= 0]
+    wins = [trade for trade in closed if is_win(trade.get("net_pnl"))]
+    losses = [trade for trade in closed if is_loss(trade.get("net_pnl"))]
     capital = _num(metrics.get("capital")) or _num(metrics.get("total_capital")) or 100000.0
     returns = [
         (_num(trade.get("net_pnl")) / capital)

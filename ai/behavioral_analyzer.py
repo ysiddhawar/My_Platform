@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from ai.missed_opportunity_analyzer import MissedOpportunityAnalyzer
 from ai.time_pattern_analyzer import TimePatternAnalyzer
+from core.trade_outcome import is_loss
 from core.context import Context
 from models.missed_opportunity import MissedOpportunity
 from models.trade import Trade
@@ -143,7 +144,7 @@ class BehavioralAnalyzer:
         streak = 0
         max_streak = 0
         for trade in trades:
-            if self._coerce_number(trade.get("net_pnl")) < 0:
+            if is_loss(self._coerce_number(trade.get("net_pnl")), bool(trade.get("is_closed", True))):
                 streak += 1
                 max_streak = max(max_streak, streak)
             else:

@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from threading import RLock
 from pathlib import Path
 
+from core.trade_outcome import classify_trade_outcome
 from models.trade import Trade
 
 
@@ -285,16 +286,16 @@ class TradeRepository:
         Determine trade status: 'WIN', 'LOSS', 'BREAK EVEN', or 'OPEN'.
         Only 'OPEN' is returned for open trades; closed trades use net_pnl.
         """
-        if not is_closed:
-            return 'OPEN'
         if net_pnl is None:
-            return None
-        if net_pnl > 0:
+            return 'OPEN' if not is_closed else None
+        outcome = classify_trade_outcome(net_pnl, is_closed)
+        if outcome == "open":
+            return 'OPEN'
+        if outcome == "win":
             return 'WIN'
-        elif net_pnl < 0:
+        if outcome == "loss":
             return 'LOSS'
-        else:
-            return 'BREAK EVEN'
+        return 'BREAK EVEN'
 
     def _deserialize_trade(self, row):
 

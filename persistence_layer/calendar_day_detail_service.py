@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from core.trade_outcome import is_loss, is_win
 from models.calendar_view import CalendarDaySummary
 from persistence_layer.calendar_repository import CalendarRepository
 from persistence_layer.missed_opportunity_repository import MissedOpportunityRepository
@@ -120,8 +121,9 @@ class CalendarDayDetailService:
         net_pnl = round(sum(float(trade.to_dict().get("net_pnl") or 0.0) for trade in trades), 6)
         gross_pnl = round(sum(float(trade.to_dict().get("gross_pnl") or 0.0) for trade in trades), 6)
         total_cost = round(sum(float(trade.to_dict().get("total_cost") or 0.0) for trade in trades), 6)
-        win_count = sum(1 for trade in trades if float(trade.to_dict().get("net_pnl") or 0.0) > 0)
-        loss_count = sum(1 for trade in trades if float(trade.to_dict().get("net_pnl") or 0.0) < 0)
+        closed_trade_dicts = [trade.to_dict() for trade in trades if trade.to_dict().get("is_closed")]
+        win_count = sum(1 for trade in closed_trade_dicts if is_win(trade.get("net_pnl")))
+        loss_count = sum(1 for trade in closed_trade_dicts if is_loss(trade.get("net_pnl")))
         total_platform_time_minutes = round(
             min(sum(minutes_within_local_day(session, day) for session in sessions), 1440.0),
             2,

@@ -21,6 +21,7 @@ import { TradeTable } from '@/components/prototype/domain/TradeTable';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import type { DashboardFilterState, InsightWorkspacePanelPayload, OverviewData, TradeRecord } from '@/types/prototype';
 import { formatCurrency, formatNumber, formatPercent, humanizeKey } from '@/utils/format';
+import { summarizeTradeOutcomes } from '@/utils/tradeOutcome';
 
 function EvidenceChip({ label, value, comparison }: { label: string; value: string; comparison?: string | null }) {
   return (
@@ -466,13 +467,14 @@ function defaultFocusChartForGroup(group?: string | null) {
 }
 
 function computeOutcomeMetrics(closedTrades: TradeRecord[], totalTrades: number) {
-  const wins = closedTrades.filter((trade) => Number(trade.net_pnl || 0) > 0);
-  const losses = closedTrades.filter((trade) => Number(trade.net_pnl || 0) < 0);
+  const outcomeSummary = summarizeTradeOutcomes(closedTrades);
+  const wins = outcomeSummary.winTrades;
+  const losses = outcomeSummary.lossTrades;
   return {
     winCount: wins.length,
     lossCount: losses.length,
-    openCount: Math.max(0, totalTrades - wins.length - losses.length),
-    winRate: closedTrades.length ? wins.length / closedTrades.length : 0,
+    openCount: Math.max(0, totalTrades - closedTrades.length),
+    winRate: outcomeSummary.winRate,
     avgWin: wins.length ? wins.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0) / wins.length : 0,
     avgLoss: losses.length ? losses.reduce((sum, trade) => sum + Number(trade.net_pnl || 0), 0) / losses.length : 0,
   };

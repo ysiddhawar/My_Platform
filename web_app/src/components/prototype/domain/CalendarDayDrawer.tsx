@@ -1,5 +1,6 @@
 import type { CalendarDayDetail } from '@/types/prototype';
 import { formatCurrency, formatDateTime, formatMinutes, formatPercent, formatNumber } from '@/utils/format';
+import { summarizeTradeOutcomes } from '@/utils/tradeOutcome';
 
 type CalendarDayDrawerProps = {
   detail: CalendarDayDetail | null;
@@ -15,9 +16,7 @@ export function CalendarDayDrawer({ detail, loading, onPrevDay, onNextDay, onClo
     ? detail.trades.reduce((sum, trade) => sum + resolveTradeRMultiple(trade), 0)
     : 0;
   const closedTrades = detail ? detail.trades.filter((trade) => trade.is_closed) : [];
-  const winRate = closedTrades.length
-    ? closedTrades.filter((trade) => Number(trade.net_pnl || 0) > 0).length / closedTrades.length
-    : 0;
+  const winRate = summarizeTradeOutcomes(closedTrades).winRate;
 
   return (
     <aside className={`rounded-[22px] border border-white/10 bg-[#333333] p-5 text-white dark:border-white/10 dark:bg-[#333333] ${className}`}>

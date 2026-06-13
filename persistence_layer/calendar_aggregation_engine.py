@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, List
 
+from core.trade_outcome import is_loss, is_win
 from models.calendar_view import CalendarDaySummary
 from persistence_layer.calendar_repository import CalendarRepository
 from persistence_layer.missed_opportunity_repository import MissedOpportunityRepository
@@ -62,8 +63,9 @@ class CalendarAggregationEngine:
             pnl = sum(float(trade.get("net_pnl") or 0.0) for trade in day_trades)
             gross_pnl = sum(float(trade.get("gross_pnl") or 0.0) for trade in day_trades)
             total_cost = sum(float(trade.get("total_cost") or 0.0) for trade in day_trades)
-            win_count = sum(1 for trade in day_trades if (trade.get("net_pnl") or 0.0) > 0)
-            loss_count = sum(1 for trade in day_trades if (trade.get("net_pnl") or 0.0) < 0)
+            closed_day_trades = [trade for trade in day_trades if trade.get("is_closed")]
+            win_count = sum(1 for trade in closed_day_trades if is_win(trade.get("net_pnl")))
+            loss_count = sum(1 for trade in closed_day_trades if is_loss(trade.get("net_pnl")))
             discipline_scores = [
                 float((trade.get("pre_trade_capture") or {}).get("metadata", {}).get("discipline_score"))
                 for trade in day_trades

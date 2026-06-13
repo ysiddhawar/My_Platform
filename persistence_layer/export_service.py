@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, List
 
+from core.trade_outcome import is_loss, is_win
 from models.share_export_record import ShareExportRecord
 from persistence_layer.export_repository import ExportRepository
 from persistence_layer.note_repository import NoteRepository
@@ -136,8 +137,9 @@ class ExportService:
         notes = payload.get("notes", [])
         ratings = payload.get("ratings", [])
         total_pnl = sum(float(trade.get("net_pnl") or 0.0) for trade in trades)
-        wins = sum(1 for trade in trades if float(trade.get("net_pnl") or 0.0) > 0)
-        losses = sum(1 for trade in trades if float(trade.get("net_pnl") or 0.0) < 0)
+        closed_trades = [trade for trade in trades if trade.get("is_closed")]
+        wins = sum(1 for trade in closed_trades if is_win(trade.get("net_pnl")))
+        losses = sum(1 for trade in closed_trades if is_loss(trade.get("net_pnl")))
 
         lines = [
             f"Journal Export - Account: {account_id}",

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { TradeRecord } from '@/types/prototype';
 import { formatCurrency, formatDate, formatHoldTime, formatNumber, formatRatio, formatTime } from '@/utils/format';
+import { classifyPnlOutcome } from '@/utils/tradeOutcome';
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -196,10 +197,11 @@ const STATUS_COLORS = {
 } as const;
 
 function getStatusStyle(pnl: number, isClosed: boolean): React.CSSProperties {
-  if (!isClosed) return {};
-  if (pnl > 0) return { color: STATUS_COLORS.win };
-  if (pnl < 0) return { color: STATUS_COLORS.loss };
-  return { color: STATUS_COLORS.breakeven };
+  const outcome = classifyPnlOutcome(pnl, isClosed);
+  if (outcome === 'win') return { color: STATUS_COLORS.win };
+  if (outcome === 'loss') return { color: STATUS_COLORS.loss };
+  if (outcome === 'breakeven') return { color: STATUS_COLORS.breakeven };
+  return {};
 }
 
 export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetching, onRefresh }: TradeTableProps) {
@@ -276,9 +278,11 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
             {trades.map((trade) => {
               const tradeId = trade.trade_id || '—';
               const isSelected = tradeId === selectedTradeId;
-              const pnl = Math.round(Number(trade.net_pnl || 0) * 100) / 100;
-              const statusStyle = getStatusStyle(pnl, trade.is_closed);
-              const pnlStyle = getStatusStyle(pnl, trade.is_closed);
+              const rawPnl = Number(trade.net_pnl || 0);
+              const pnl = Math.round(rawPnl * 100) / 100;
+              const outcome = classifyPnlOutcome(rawPnl, trade.is_closed);
+              const statusStyle = getStatusStyle(rawPnl, trade.is_closed);
+              const pnlStyle = getStatusStyle(rawPnl, trade.is_closed);
               const sideStyle = (trade.side || '').toLowerCase() === 'buy'
                 ? { color: STATUS_COLORS.win }
                 : (trade.side || '').toLowerCase() === 'sell'
@@ -300,7 +304,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                   <Cell selected={isSelected}>{trade.entry_date ? formatDate(trade.entry_date, trade.entry_timezone || 'UTC') : '—'}</Cell>
                   <Cell selected={isSelected} strong>{trade.symbol}</Cell>
                   <Cell selected={isSelected} className="font-semibold" style={statusStyle}>
-                    {!trade.is_closed ? 'OPEN' : (pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'BREAKEVEN')}
+                    {outcome.toUpperCase()}
                   </Cell>
                   <Cell selected={isSelected} style={pnlStyle}>{formatCurrency(pnl)}</Cell>
                   <Cell selected={isSelected}>
