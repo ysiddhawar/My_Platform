@@ -3,7 +3,7 @@ import type { PrototypeView } from '@/types/prototype';
 
 const items: Array<{ key: PrototypeView; label: string; hint: string }> = [
   { key: 'dashboard', label: 'Dashboard', hint: 'Metrics, visuals, and system state' },
-  { key: 'journal', label: 'Journal', hint: 'Executed trade records' },
+  { key: 'journal', label: 'Trades', hint: 'Executed trade records' },
   { key: 'trade-detail', label: 'Trade Detail', hint: 'Full trade breakdown' },
   { key: 'ai-insights', label: 'AI Insights', hint: 'Insight layer' },
   { key: 'missed-opportunities', label: 'Missed Opportunities', hint: 'Unexecuted setups' },

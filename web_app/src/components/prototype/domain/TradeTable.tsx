@@ -263,7 +263,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
       <div className="overflow-y-auto overflow-x-auto flex-1 min-h-0">
         <table className="min-w-[1500px] border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-gray-50 dark:bg-[#0d0d0d]">
+            <tr className="bg-[var(--journal-header-bg)] dark:bg-[var(--journal-header-bg-dark)]">
               {allColumns.map(({ key, label }) => (
                 <th
                   key={key}

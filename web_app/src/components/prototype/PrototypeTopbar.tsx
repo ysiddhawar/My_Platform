@@ -8,7 +8,7 @@ import type { AccountSummary, DashboardFilterState, PrototypeView, TradeRecord }
 
 const titleMap: Record<PrototypeView, string> = {
   dashboard: 'Dashboard',
-  journal: 'Journal',
+  journal: 'Trades',
   'trade-detail': 'Trade Detail',
   'ai-insights': 'AI Insights',
   'missed-opportunities': 'Missed Opportunities',

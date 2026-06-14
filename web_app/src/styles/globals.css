@@ -46,6 +46,8 @@
   --hero-grid-line: transparent;
   --hero-glow-a: transparent;
   --hero-glow-b: transparent;
+  --journal-header-bg: #f8fafc;
+  --journal-header-bg-dark: #1e293b;
 }
 
 :root[data-theme='dark'] {
