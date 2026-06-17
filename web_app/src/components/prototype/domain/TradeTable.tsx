@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import React from 'react';
 import type { TradeRecord } from '@/types/prototype';
 import { formatCurrency, formatDate, formatHoldTime, formatNumber, formatRatio, formatTime } from '@/utils/format';
 import { classifyPnlOutcome } from '@/utils/tradeOutcome';
@@ -66,8 +67,6 @@ const EXTRA_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'exit_day', label: 'Exit Day' },
   { key: 'exit_reason', label: 'Exit Reason' },
   { key: 'quantity', label: 'Quantity' },
-  { key: 'commission', label: 'Commission' },
-  { key: 'swaps', label: 'Swaps' },
   { key: 'slippage_cost', label: 'Slippage Cost' },
   { key: 'gross_pnl', label: 'Gross PnL' },
   { key: 'rrr', label: 'RRR' },
@@ -77,22 +76,20 @@ const EXTRA_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'closed_before_plan', label: 'Closed Early' },
 ];
 
-const STORAGE_KEY = 'my_platform_journal_extra_columns';
+// ── Storage keys ──
+const EXTRA_COLUMNS_STORAGE_KEY = 'my_platform_journal_extra_columns';
+const DEFAULT_KEYS_STORAGE_KEY = 'my_platform_journal_default_keys';
+const COLUMN_ORDER_STORAGE_KEY = 'my_platform_journal_column_order';
 
+const ALL_DEFAULT_KEYS = DEFAULT_COLUMNS.map(c => c.key);
+const ALL_EXTRA_KEYS = EXTRA_COLUMNS.map(c => c.key);
+
+// ── localStorage helpers ──
 function loadExtraColumns(): ColumnKey[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(EXTRA_COLUMNS_STORAGE_KEY);
     const keys = raw ? (JSON.parse(raw) as ColumnKey[]) : [];
-    // Normalize to EXTRA_COLUMNS order to prevent header/cell misalignment
-    const extraKeys = new Set(EXTRA_COLUMNS.filter(c => keys.includes(c.key)).map(c => c.key));
-    const staleKeys = keys.filter(k => !extraKeys.has(k));
-    if (staleKeys.length > 0) {
-      // Persist cleaned set immediately
-      const cleaned = EXTRA_COLUMNS.filter(c => keys.includes(c.key)).map(c => c.key);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
-      return cleaned;
-    }
     return EXTRA_COLUMNS.filter(col => keys.includes(col.key)).map(col => col.key);
   } catch {
     return [];
@@ -101,7 +98,39 @@ function loadExtraColumns(): ColumnKey[] {
 
 function persistExtraColumns(keys: ColumnKey[]) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+  window.localStorage.setItem(EXTRA_COLUMNS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function loadVisibleDefaultKeys(): Set<string> {
+  if (typeof window === 'undefined') return new Set(ALL_DEFAULT_KEYS);
+  try {
+    const raw = window.localStorage.getItem(DEFAULT_KEYS_STORAGE_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch { /* ignore */ }
+  return new Set(ALL_DEFAULT_KEYS);
+}
+
+function persistVisibleDefaultKeys(keys: Set<string>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(DEFAULT_KEYS_STORAGE_KEY, JSON.stringify(Array.from(keys)));
+}
+
+function loadExtraColumnOrder(): string[] {
+  if (typeof window === 'undefined') return ALL_EXTRA_KEYS;
+  try {
+    const raw = window.localStorage.getItem(COLUMN_ORDER_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as string[];
+      // Keep only keys that still exist
+      return ALL_EXTRA_KEYS.filter(k => parsed.includes(k));
+    }
+  } catch { /* ignore */ }
+  return ALL_EXTRA_KEYS;
+}
+
+function persistExtraColumnOrder(order: string[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(order));
 }
 
 function computeHoldTime(entryTime: string, exitTime: string | null | undefined): string {
@@ -133,7 +162,7 @@ function formatNetROI(trade: TradeRecord): string {
 
 
 
-function renderExtraCell(trade: TradeRecord, key: ColumnKey, isSelected: boolean): { value: string; className?: string } {
+function renderExtraCell(trade: TradeRecord, key: ColumnKey): { value: string; className?: string } {
   switch (key) {
     case 'trade_id':
       return { value: trade.trade_id ? trade.trade_id.replace(/^mt5_/, '') : '—' };
@@ -206,58 +235,231 @@ function getStatusStyle(pnl: number, isClosed: boolean): React.CSSProperties {
 
 export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetching, onRefresh }: TradeTableProps) {
   const [extraColumns, setExtraColumns] = useState<ColumnKey[]>(loadExtraColumns);
+  const [visibleDefaultKeys, setVisibleDefaultKeys] = useState<Set<string>>(loadVisibleDefaultKeys);
+  const [extraColumnOrder, setExtraColumnOrder] = useState<string[]>(loadExtraColumnOrder);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const dragIndexRef = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const toggleExtraColumn = useCallback((key: ColumnKey) => {
+  // ── Persist to localStorage ──
+  const setExtraColumnsPersisted = useCallback((fn: (prev: ColumnKey[]) => ColumnKey[]) => {
     setExtraColumns((prev) => {
-      const next = prev.includes(key) ? prev.filter((c) => c !== key) : [...prev, key];
+      const next = fn(prev);
       persistExtraColumns(next);
       return next;
     });
   }, []);
 
+  const setVisibleDefaultKeysPersisted = useCallback((fn: (prev: Set<string>) => Set<string>) => {
+    setVisibleDefaultKeys((prev) => {
+      const next = fn(prev);
+      persistVisibleDefaultKeys(next);
+      return next;
+    });
+  }, []);
+
+  const setExtraColumnOrderPersisted = useCallback((fn: (prev: string[]) => string[]) => {
+    setExtraColumnOrder((prev) => {
+      const next = fn(prev);
+      persistExtraColumnOrder(next);
+      return next;
+    });
+  }, []);
+
+  // ── Close dropdown helpers ──
+  const closeDropdown = useCallback(() => setShowColumnSelector(false), []);
+
+  React.useEffect(() => {
+    if (!showColumnSelector) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeDropdown();
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        closeDropdown();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onMouseDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onMouseDown);
+    };
+  }, [showColumnSelector, closeDropdown]);
+
+  // ── Select All logic ──
+  const allDefaultVisible = ALL_DEFAULT_KEYS.every(k => visibleDefaultKeys.has(k));
+  const allExtraVisible = ALL_EXTRA_KEYS.every(k => extraColumns.includes(k as ColumnKey));
+  const allSelected = allDefaultVisible && allExtraVisible;
+
+  const handleSelectAll = useCallback(() => {
+    if (allSelected) {
+      // Deselecting: keep default columns, clear extra columns
+      setVisibleDefaultKeysPersisted(() => new Set(ALL_DEFAULT_KEYS));
+      setExtraColumnsPersisted(() => []);
+    } else {
+      // Selecting: show all
+      setVisibleDefaultKeysPersisted(() => new Set(ALL_DEFAULT_KEYS));
+      setExtraColumnsPersisted(() => ALL_EXTRA_KEYS as ColumnKey[]);
+    }
+  }, [allSelected, setVisibleDefaultKeysPersisted, setExtraColumnsPersisted]);
+
+  // ── Toggle single column visibility ──
+  const toggleDefaultKey = useCallback((key: string) => {
+    setVisibleDefaultKeysPersisted((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, [setVisibleDefaultKeysPersisted]);
+
+  const toggleExtraColumn = useCallback((key: ColumnKey) => {
+    setExtraColumnsPersisted((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  }, [setExtraColumnsPersisted]);
+
+  // ── Drag-and-drop handlers for extra columns ──
+  const handleDragStart = useCallback((index: number) => {
+    dragIndexRef.current = index;
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    const currentDragIndex = dragIndexRef.current;
+    if (currentDragIndex === null || currentDragIndex === dropIndex) return;
+    setExtraColumnOrderPersisted((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(currentDragIndex, 1);
+      next.splice(dropIndex, 0, moved);
+      return next;
+    });
+    dragIndexRef.current = dropIndex;
+  }, [setExtraColumnOrderPersisted]);
+
+  const handleDragEnd = useCallback(() => {
+    dragIndexRef.current = null;
+  }, []);
+
+  // ── Reset handler ──
+  const handleReset = useCallback(() => {
+    setVisibleDefaultKeysPersisted(() => new Set(ALL_DEFAULT_KEYS));
+    setExtraColumnsPersisted(() => []);
+    setExtraColumnOrderPersisted(() => ALL_EXTRA_KEYS);
+  }, [setVisibleDefaultKeysPersisted, setExtraColumnsPersisted, setExtraColumnOrderPersisted]);
+
+  // ── Computed visible columns in display order ──
   const allColumns = useMemo(() => {
-    const extra = EXTRA_COLUMNS.filter((col) => extraColumns.includes(col.key));
-    return [...DEFAULT_COLUMNS, ...extra];
-  }, [extraColumns]);
+    const defaultCols = DEFAULT_COLUMNS.filter(c => visibleDefaultKeys.has(c.key));
+    const extraCols = EXTRA_COLUMNS
+      .filter(c => extraColumns.includes(c.key))
+      .sort((a, b) => extraColumnOrder.indexOf(a.key) - extraColumnOrder.indexOf(b.key));
+    return [...defaultCols, ...extraCols];
+  }, [visibleDefaultKeys, extraColumns, extraColumnOrder]);
+
+  // Ordered list of extra column keys for the dropdown (following columnOrder)
+  const orderedExtraKeysInDropdown = useMemo(() => {
+    return extraColumnOrder.filter((k): k is ColumnKey => ALL_EXTRA_KEYS.includes(k as ColumnKey));
+  }, [extraColumnOrder]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden rounded-[26px] border border-black/10 bg-white dark:border-white/10 dark:bg-[#060606]">
-      <div className="sticky top-0 z-20 bg-white dark:bg-[#060606] flex-shrink-0 flex items-center justify-between border-b border-black/8 px-4 py-2 dark:border-white/10">
+      <div className="sticky top-0 z-20 bg-white dark:bg-[#060606] flex-shrink-0 flex items-center border-b border-black/8 px-4 py-2 dark:border-white/10">
         <div className="relative">
           <button
             type="button"
+            onMouseDown={(e) => e.stopPropagation()}
             onClick={() => setShowColumnSelector((prev) => !prev)}
             className="rounded-full border border-black/10 bg-gray-50 px-4 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[#FF5900] hover:text-[#FF5900] dark:border-white/10 dark:bg-[#0d0d0d] dark:text-slate-300 dark:hover:border-[#FF5900] dark:hover:text-[#FF5900]"
           >
-            {showColumnSelector ? 'Done' : '+ Add Columns'}
+            {showColumnSelector ? 'Done' : 'Columns'}
           </button>
           {showColumnSelector && (
-            <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-xl border border-black/10 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-[#121212]">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-slate-400">Show extra columns</p>
-              <div className="max-h-64 space-y-1 overflow-y-auto">
-                {EXTRA_COLUMNS.map((col) => (
-                  <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-black transition hover:bg-gray-100 dark:text-white dark:hover:bg-white/10">
-                    <input
-                      type="checkbox"
-                      checked={extraColumns.includes(col.key)}
-                      onChange={() => toggleExtraColumn(col.key)}
-                      className="accent-[#FF5900]"
-                    />
-                    {col.label}
-                  </label>
-                ))}
+            <div ref={dropdownRef} className="absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-black/10 bg-white p-4 shadow-lg dark:border-white/10 dark:bg-[#121212] max-h-[400px] overflow-y-auto">
+              {/* Select All */}
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-[#FF5900]">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={handleSelectAll}
+                  className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                />
+                Select All
+              </label>
+
+              <hr className="my-2 border-gray-200 dark:border-gray-700" />
+
+              {/* Default Columns */}
+              <div className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Default Columns
               </div>
+              {DEFAULT_COLUMNS.map((col) => (
+                <label key={col.key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-0.5 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={visibleDefaultKeys.has(col.key)}
+                    onChange={() => toggleDefaultKey(col.key)}
+                    className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                  />
+                  {col.label}
+                </label>
+              ))}
+
+              <hr className="my-2 border-gray-200 dark:border-gray-700" />
+
+              {/* Other Columns (draggable) */}
+              <div className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Other Columns
+              </div>
+              <div className="space-y-1">
+                {orderedExtraKeysInDropdown.map((key, index) => {
+                  const colDef = EXTRA_COLUMNS.find((c) => c.key === key);
+                  if (!colDef) return null;
+                  const isVisible = extraColumns.includes(key as ColumnKey);
+                  return (
+                    <div
+                      key={key}
+                      draggable
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex cursor-grab items-center gap-2 rounded-lg px-2 py-0.5 text-sm transition hover:bg-gray-100 dark:hover:bg-gray-800 ${dragIndexRef.current === index ? 'ring-1 ring-[#FF5900]' : ''}`}
+                    >
+                      <span className="select-none text-gray-400 dark:text-gray-500">⠿</span>
+                      <input
+                        type="checkbox"
+                        checked={isVisible}
+                        onChange={() => toggleExtraColumn(key as ColumnKey)}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                      />
+                      {colDef.label}
+                    </div>
+                  );
+                })}
+              </div>
+
+              
             </div>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="inline-flex items-center rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition hover:border-[#ff5900] hover:text-white hover:shadow-[0_10px_24px_-18px_rgba(255,89,0,0.28),0_0_0_1px_rgba(255,89,0,0.26)] dark:bg-white dark:text-black dark:hover:text-black"
-        >
-          {isRefetching ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="rounded-full border border-black/10 bg-gray-50 px-4 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[#FF5900] hover:text-[#FF5900] dark:border-white/10 dark:bg-[#0d0d0d] dark:text-slate-300 dark:hover:border-[#FF5900] dark:hover:text-[#FF5900]"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={onRefresh}
+            className="inline-flex items-center rounded-full bg-black px-4 py-1.5 text-xs font-semibold text-white transition hover:border-[#ff5900] hover:text-white hover:shadow-[0_10px_24px_-18px_rgba(255,89,0,0.28),0_0_0_1px_rgba(255,89,0,0.26)] dark:bg-white dark:text-black dark:hover:text-black"
+          >
+            {isRefetching ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <div className="overflow-y-auto overflow-x-auto flex-1 min-h-0">
@@ -325,8 +527,10 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.commission || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.swaps || 0))}</Cell>
                   <Cell selected={isSelected}>{formatCurrency(Number(trade.fees || 0))}</Cell>
-                  {allColumns.slice(DEFAULT_COLUMNS.length).map(({ key }) => {
-                    const { value, className } = renderExtraCell(trade, key as ColumnKey, isSelected);
+                  {allColumns.slice(
+                      DEFAULT_COLUMNS.filter(c => visibleDefaultKeys.has(c.key)).length
+                    ).map(({ key }) => {
+                    const { value, className } = renderExtraCell(trade, key as ColumnKey);
                     return (
                       <Cell key={key} selected={isSelected} className={className}>
                         {value}
