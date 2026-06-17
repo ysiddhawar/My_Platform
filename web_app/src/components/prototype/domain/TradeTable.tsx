@@ -383,7 +383,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                   type="checkbox"
                   checked={allSelected}
                   onChange={handleSelectAll}
-                  className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                  style={{ accentColor: '#FF5900', appearance: 'auto', WebkitAppearance: 'checkbox', MozAppearance: 'checkbox', width: '16px', height: '16px', backgroundColor: 'white', border: '1px solid #9CA3AF', borderRadius: '4px' }}
                 />
                 Select All
               </label>
@@ -400,7 +400,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                     type="checkbox"
                     checked={visibleDefaultKeys.has(col.key)}
                     onChange={() => toggleDefaultKey(col.key)}
-                    className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                    style={{ accentColor: '#FF5900', appearance: 'auto', WebkitAppearance: 'checkbox', MozAppearance: 'checkbox', width: '16px', height: '16px', backgroundColor: 'white', border: '1px solid #9CA3AF', borderRadius: '4px' }}
                   />
                   {col.label}
                 </label>
@@ -432,7 +432,7 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
                         checked={isVisible}
                         onChange={() => toggleExtraColumn(key as ColumnKey)}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="accent-[#FF5900] h-4 w-4 rounded border-gray-400 dark:border-gray-500 text-[#FF5900] focus:ring-[#FF5900]"
+                        style={{ accentColor: '#FF5900', appearance: 'auto', WebkitAppearance: 'checkbox', MozAppearance: 'checkbox', width: '16px', height: '16px', backgroundColor: 'white', border: '1px solid #9CA3AF', borderRadius: '4px' }}
                       />
                       {colDef.label}
                     </div>
