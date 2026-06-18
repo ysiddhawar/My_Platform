@@ -311,7 +311,18 @@ function JournalInsightPreview({
     );
   }
 
-  const trades = searchText.trim().length >= 2 ? searchedData || [] : allTrades || [];
+  const trades = useMemo(() => {
+    const raw = searchText.trim().length >= 2 ? searchedData || [] : allTrades || [];
+    return [...raw].sort((a, b) => {
+      const dateA = a.entry_date || a.entry_time?.slice(0, 10) || '';
+      const dateB = b.entry_date || b.entry_time?.slice(0, 10) || '';
+      const cmp = dateB.localeCompare(dateA);
+      if (cmp !== 0) return cmp;
+      const timeA = a.entry_time || '';
+      const timeB = b.entry_time || '';
+      return timeB.localeCompare(timeA);
+    });
+  }, [allTrades, searchedData, searchText]);
   if (allTradesLoading || searching) {
     return <p className="text-sm text-black/70 dark:text-white/70">Loading journal evidence…</p>;
   }

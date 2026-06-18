@@ -4,6 +4,19 @@ import { useQuery } from 'react-query';
 import { fetchTrades, searchTrades } from '@/api/prototype';
 import { TradeTable } from '@/components/prototype/domain/TradeTable';
 import { usePrototypeStore } from '@/state/prototypeStore';
+import type { TradeRecord } from '@/types/prototype';
+
+function sortTradesNewestFirst(trades: TradeRecord[]): TradeRecord[] {
+  return [...trades].sort((a, b) => {
+    const dateA = a.entry_date || a.entry_time?.slice(0, 10) || '';
+    const dateB = b.entry_date || b.entry_time?.slice(0, 10) || '';
+    const cmp = dateB.localeCompare(dateA);
+    if (cmp !== 0) return cmp;
+    const timeA = a.entry_time || '';
+    const timeB = b.entry_time || '';
+    return timeB.localeCompare(timeA);
+  });
+}
 
 export function JournalScreen() {
   const accountId = usePrototypeStore((state) => state.accountId);
@@ -22,10 +35,8 @@ export function JournalScreen() {
   );
 
   const trades = useMemo(() => {
-    if (searchText.trim().length >= 2) {
-      return searchedData || [];
-    }
-    return data || [];
+    const raw = searchText.trim().length >= 2 ? (searchedData || []) : (data || []);
+    return sortTradesNewestFirst(raw);
   }, [data, searchedData, searchText]);
 
   return (
