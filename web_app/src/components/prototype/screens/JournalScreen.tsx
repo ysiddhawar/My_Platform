@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useQuery } from 'react-query';
 
 import { fetchTrades, searchTrades } from '@/api/prototype';
+import { TradeDetailOverlay } from '@/components/prototype/domain/TradeDetailOverlay';
 import { TradeTable } from '@/components/prototype/domain/TradeTable';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import type { TradeRecord } from '@/types/prototype';
@@ -63,7 +64,7 @@ export function JournalScreen() {
       ) : null}
 
       {trades.length > 0 ? (
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 relative">
         <TradeTable
           trades={trades}
           selectedTradeId={selectedTradeId}
@@ -73,6 +74,13 @@ export function JournalScreen() {
         />
       </div>
       ) : null}
+
+      {selectedTradeId && (
+        <TradeDetailOverlay
+          tradeId={selectedTradeId}
+          onClose={() => selectTrade(null!)}
+        />
+      )}
     </div>
   );
 }

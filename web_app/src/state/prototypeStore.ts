@@ -14,7 +14,6 @@ const DASHBOARD_FILTER_PRESETS_KEY = 'my_platform_dashboard_filter_presets';
 export const defaultSidebarOrder: PrototypeView[] = [
   'dashboard',
   'journal',
-  'trade-detail',
   'ai-insights',
   'missed-opportunities',
   'calendar',
@@ -174,7 +173,7 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
   dashboardFilters: defaultDashboardFilters,
   dashboardFilterPresets: [],
   setActiveView: (activeView) => set({ activeView }),
-  selectTrade: (selectedTradeId) => set({ selectedTradeId, activeView: 'trade-detail' }),
+  selectTrade: (selectedTradeId) => set({ selectedTradeId }),
   selectDay: (selectedDay) => set({ selectedDay, activeView: 'calendar' }),
   setCalendarVisibleMonthYear: (calendarVisibleMonth, calendarVisibleYear) => set({ calendarVisibleMonth, calendarVisibleYear }),
   setJournalSearchText: (journalSearchText) => set({ journalSearchText }),

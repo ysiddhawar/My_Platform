@@ -12,7 +12,6 @@ import { DemoDataScreen } from '@/components/prototype/screens/DemoDataScreen';
 import { JournalScreen } from '@/components/prototype/screens/JournalScreen';
 import { MissedOpportunitiesScreen } from '@/components/prototype/screens/MissedOpportunitiesScreen';
 import { PositionSizerScreen } from '@/components/prototype/screens/PositionSizerScreen';
-import { TradeDetailScreen } from '@/components/prototype/screens/TradeDetailScreen';
 import type { PrototypeView } from '@/types/prototype';
 import { usePrototypeStore } from '@/state/prototypeStore';
 
@@ -161,7 +160,6 @@ export function PrototypeShell() {
               <>
                 {activeView === 'dashboard' ? <DashboardScreen /> : null}
                 {activeView === 'journal' ? <JournalScreen /> : null}
-                {activeView === 'trade-detail' ? <TradeDetailScreen /> : null}
                 {activeView === 'ai-insights' ? <AIInsightsScreen activeTab={aiActiveTab} onTabChange={setAiActiveTab} /> : null}
                 {activeView === 'missed-opportunities' ? <MissedOpportunitiesScreen /> : null}
                 {activeView === 'calendar' ? <CalendarScreen /> : null}

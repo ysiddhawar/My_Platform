@@ -1,7 +1,6 @@
 export type PrototypeView =
   | 'dashboard'
   | 'journal'
-  | 'trade-detail'
   | 'ai-insights'
   | 'missed-opportunities'
   | 'calendar'

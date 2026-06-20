@@ -4,7 +4,6 @@ import type { PrototypeView } from '@/types/prototype';
 const items: Array<{ key: PrototypeView; label: string; hint: string }> = [
   { key: 'dashboard', label: 'Dashboard', hint: 'Metrics, visuals, and system state' },
   { key: 'journal', label: 'Trades', hint: 'Executed trade records' },
-  { key: 'trade-detail', label: 'Trade Detail', hint: 'Full trade breakdown' },
   { key: 'ai-insights', label: 'AI Insights', hint: 'Insight layer' },
   { key: 'missed-opportunities', label: 'Missed Opportunities', hint: 'Unexecuted setups' },
   { key: 'calendar', label: 'Calendar', hint: 'Daily result and platform time' },
@@ -147,8 +146,6 @@ function SidebarItemIcon({ view }: { view: PrototypeView }) {
       return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 13h6V4H4zM14 20h6v-9h-6zM14 10h6V4h-6zM4 20h6v-3H4z" /></svg>;
     case 'journal':
       return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 4h11a3 3 0 0 1 3 3v13H9a3 3 0 0 0-3 3z" /><path d="M6 4a3 3 0 0 0-3 3v13h3" /><path d="M9 9h7M9 13h7" /></svg>;
-    case 'trade-detail':
-      return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 4h12v16H6z" /><path d="M9 8h6M9 12h6M9 16h3" /></svg>;
     case 'ai-insights':
       return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3a7 7 0 0 0-4 12.7V19a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3.3A7 7 0 0 0 12 3Z" /><path d="M10 22h4" /></svg>;
     case 'missed-opportunities':

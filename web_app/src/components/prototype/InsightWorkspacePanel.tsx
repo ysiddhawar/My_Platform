@@ -99,7 +99,7 @@ export function InsightWorkspacePanel() {
           {panel.target.view === 'journal' ? <JournalInsightPreview key={panelInstanceKey} accountId={accountId} panel={panel} /> : null}
           {panel.target.view === 'calendar' ? <CalendarInsightPreview key={panelInstanceKey} accountId={accountId} panel={panel} /> : null}
           {panel.target.view === 'missed-opportunities' ? <MissedInsightPreview key={panelInstanceKey} accountId={accountId} panel={panel} /> : null}
-          {panel.target.view === 'trade-detail' ? <JournalInsightPreview key={panelInstanceKey} accountId={accountId} panel={panel} /> : null}
+          
         </div>
       </div>
     </aside>

@@ -441,6 +441,22 @@ export async function importTradeCsv(csvText: string, accountId = DEMO_ACCOUNT_I
   };
 }
 
+export async function updateTrade(
+  tradeId: string,
+  payload: {
+    strategy_tag?: string | null;
+    probability_bucket?: string | null;
+    confidence_score?: number | null;
+    notes?: string | null;
+    tags?: string[];
+  },
+): Promise<TradeRecord> {
+  const response = await withSessionRetry(() =>
+    apiClient.patch(`/journal/trade/${encodeURIComponent(tradeId)}`, payload),
+  );
+  return response.data?.trade as TradeRecord;
+}
+
 export async function seedInvestorDemoPack(
   accountId = DEMO_ACCOUNT_ID,
   options?: { broker_id?: string; account_name?: string; initial_balance?: number; trade_count?: number; timezone_name?: string },
