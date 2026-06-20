@@ -1,8 +1,36 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import type { TradeRecord } from '@/types/prototype';
 import { formatCurrency, formatDate, formatHoldTime, formatNumber, formatRatio, formatTime } from '@/utils/format';
 import { classifyPnlOutcome } from '@/utils/tradeOutcome';
+
+const FILTER_COLUMNS: string[] = ['symbol', 'status', 'setup', 'market_type', 'entry_day', 'exit_day', 'exit_reason'];
+
+function getFilterValue(trade: TradeRecord, colKey: string): string {
+  switch (colKey) {
+    case 'status':
+      return classifyPnlOutcome(Number(trade.net_pnl || 0), trade.is_closed);
+    case 'setup':
+      return (trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync')
+        ? trade.strategy_tag
+        : (trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : '—');
+    case 'market_type':
+      return trade.market_type || '—';
+    case 'entry_day':
+      return trade.entry_day_of_week || '—';
+    case 'exit_day':
+      return trade.exit_day_of_week || '—';
+    case 'exit_reason':
+      return trade.exit_reason || '—';
+    case 'symbol':
+      return trade.symbol || '—';
+    default:
+      const val = trade[colKey as keyof TradeRecord];
+      return val != null ? String(val) : '—';
+  }
+}
+
+type SortDirection = 'asc' | 'desc' | null;
 
 type TradeTableProps = {
   trades: TradeRecord[];
@@ -238,8 +266,12 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
   const [visibleDefaultKeys, setVisibleDefaultKeys] = useState<Set<string>>(loadVisibleDefaultKeys);
   const [extraColumnOrder, setExtraColumnOrder] = useState<string[]>(loadExtraColumnOrder);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: SortDirection }>({ key: 'entry_date', direction: 'desc' });
+  const [activeFilters, setActiveFilters] = useState<Record<string, Set<string>>>({});
+  const [activeFilterColumn, setActiveFilterColumn] = useState<string | null>(null);
   const dragIndexRef = useRef<number | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Persist to localStorage ──
   const setExtraColumnsPersisted = useCallback((fn: (prev: ColumnKey[]) => ColumnKey[]) => {
@@ -347,7 +379,217 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
     setVisibleDefaultKeysPersisted(() => new Set(ALL_DEFAULT_KEYS));
     setExtraColumnsPersisted(() => []);
     setExtraColumnOrderPersisted(() => ALL_EXTRA_KEYS);
+    setSortConfig({ key: 'entry_date', direction: 'desc' });
+    setActiveFilters({});
+    setActiveFilterColumn(null);
   }, [setVisibleDefaultKeysPersisted, setExtraColumnsPersisted, setExtraColumnOrderPersisted]);
+
+  // ── Header click handler ──
+  const handleHeaderClick = useCallback((key: string) => {
+    if (FILTER_COLUMNS.includes(key)) {
+      // Toggle filter dropdown for this column
+      setActiveFilterColumn(prev => (prev === key ? null : key));
+    } else {
+      // Sorting logic
+      setSortConfig((prev) => ({
+        key,
+        direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+      }));
+    }
+  }, []);
+
+  // ── Toggle filter value ──
+  const toggleFilterValue = useCallback((colKey: string, value: string) => {
+    setActiveFilters(prev => {
+      const next = { ...prev };
+      if (!next[colKey]) next[colKey] = new Set();
+      const set = new Set(next[colKey]);
+      if (set.has(value)) set.delete(value);
+      else set.add(value);
+      next[colKey] = set;
+      return next;
+    });
+  }, []);
+
+  // ── Clear filter for a column ──
+  const clearColumnFilter = useCallback((colKey: string) => {
+    setActiveFilters(prev => {
+      const next = { ...prev };
+      delete next[colKey];
+      return next;
+    });
+    setActiveFilterColumn(null);
+  }, []);
+
+  // ── Close filter dropdown on Escape / outside click ──
+  useEffect(() => {
+    if (!activeFilterColumn) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveFilterColumn(null);
+    };
+    const onMouseDown = (e: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setActiveFilterColumn(null);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onMouseDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onMouseDown);
+    };
+  }, [activeFilterColumn]);
+
+  // ── Get sortable value from a trade for a given column key ──
+  const getSortValue = useCallback((trade: TradeRecord, key: string): number | string | boolean => {
+    switch (key) {
+      // Date columns: parse to numeric timestamp
+      case 'entry_date':
+        return trade.entry_date ? new Date(trade.entry_date).getTime() : 0;
+      case 'exit_date':
+        return trade.exit_date ? new Date(trade.exit_date).getTime() : 0;
+      case 'entry_time':
+        return trade.entry_time ? new Date(trade.entry_time).getTime() : 0;
+      case 'exit_time':
+        return trade.exit_time ? new Date(trade.exit_time).getTime() : 0;
+
+      // Numeric columns
+      case 'net_pnl':
+        return Number(trade.net_pnl || 0);
+      case 'entry_price':
+        return Number(trade.entry_price || 0);
+      case 'exit_price':
+        return trade.exit_price != null ? Number(trade.exit_price) : -Infinity;
+      case 'risk_amount':
+        return trade.risk_amount != null ? Number(trade.risk_amount) : -Infinity;
+      case 'r_multiple':
+        return Number(trade.r_multiple || 0);
+      case 'commission':
+        return Number(trade.commission || 0);
+      case 'swaps':
+        return Number(trade.swaps || 0);
+      case 'fees':
+        return Number(trade.fees || 0);
+      case 'quantity':
+        return Number(trade.quantity || 0);
+      case 'slippage_cost':
+        return Number(trade.slippage_cost || 0);
+      case 'gross_pnl':
+        return Number(trade.gross_pnl || 0);
+      case 'stop_loss':
+        return Number(trade.stop_loss_at_entry || 0);
+      case 'target':
+        return Number(trade.target_at_entry || 0);
+      case 'rrr':
+        return Number(trade.rrr_at_entry || 0);
+      case 'confidence_score':
+        return trade.confidence_score != null ? Number(trade.confidence_score) : -Infinity;
+      case 'change_percent': {
+        const entry = Number(trade.entry_price || 0);
+        const exit = trade.exit_price != null ? Number(trade.exit_price) : null;
+        if (!entry || exit == null) return -Infinity;
+        return ((exit - entry) / entry) * 100;
+      }
+      case 'net_roi': {
+        const pnl = Number(trade.net_pnl || 0);
+        if (!trade.risk_amount || Number(trade.risk_amount) <= 0 || !Number.isFinite(pnl)) return -Infinity;
+        return (pnl / Number(trade.risk_amount)) * 100;
+      }
+
+      // Status column — sort by numeric outcome value
+      case 'status': {
+        const rawPnl = Number(trade.net_pnl || 0);
+        const outcome = classifyPnlOutcome(rawPnl, trade.is_closed);
+        if (outcome === 'win') return 2;
+        if (outcome === 'breakeven') return 1;
+        if (outcome === 'loss') return 0;
+        return -1;
+      }
+
+      // Hold time — compute numeric ms
+      case 'hold_time': {
+        if (!trade.exit_time) return -Infinity;
+        const entry = new Date(trade.entry_time).getTime();
+        const exit = new Date(trade.exit_time).getTime();
+        if (Number.isNaN(entry) || Number.isNaN(exit)) return -Infinity;
+        const diffMs = exit - entry;
+        return diffMs > 0 ? diffMs : -Infinity;
+      }
+
+      // Boolean column
+      case 'closed_before_plan':
+        return trade.closed_before_plan ? 1 : 0;
+
+      // String columns
+      case 'symbol':
+        return (trade.symbol || '').toLowerCase();
+      case 'side':
+        return (trade.side || '').toLowerCase();
+      case 'setup': {
+        const tag = trade.strategy_tag && trade.strategy_tag !== 'MT5 Historical Sync' ? trade.strategy_tag : null;
+        const strat = trade.strategy && trade.strategy !== 'MT5 Historical Sync' ? trade.strategy : null;
+        return (tag || strat || '').toLowerCase();
+      }
+      case 'exit_reason':
+        return (trade.exit_reason || '').toLowerCase();
+      case 'trade_id':
+        return (trade.trade_id || '').toLowerCase();
+      case 'market_type':
+        return (trade.market_type || '').toLowerCase();
+      case 'entry_day':
+        return (trade.entry_day_of_week || '').toLowerCase();
+      case 'exit_day':
+        return (trade.exit_day_of_week || '').toLowerCase();
+      case 'emotion_tag':
+        return (trade.emotion_tag || '').toLowerCase();
+      case 'probability_bucket':
+        return (trade.probability_bucket || '').toLowerCase();
+
+      default:
+        return '';
+    }
+  }, []);
+
+  // ── Unique values for filterable columns ──
+  const columnUniqueValues = useMemo(() => {
+    const values: Record<string, Set<string>> = {};
+    for (const key of FILTER_COLUMNS) {
+      const set = new Set<string>();
+      trades.forEach(trade => {
+        const value = getFilterValue(trade, key);
+        if (value) set.add(value);
+      });
+      values[key] = set;
+    }
+    return values;
+  }, [trades]);
+
+  // ── Sorted and filtered trades ──
+  const sortedAndFilteredTrades = useMemo(() => {
+    // 1. Sort
+    let sorted = [...trades];
+    if (sortConfig.direction) {
+      sorted.sort((a, b) => {
+        const aVal = getSortValue(a, sortConfig.key);
+        const bVal = getSortValue(b, sortConfig.key);
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    // 2. Filter
+    let filtered = sorted;
+    for (const [colKey, selectedSet] of Object.entries(activeFilters)) {
+      if (selectedSet.size === 0) continue;
+      filtered = filtered.filter(trade => {
+        const value = getFilterValue(trade, colKey);
+        return selectedSet.has(value);
+      });
+    }
+
+    return filtered;
+  }, [trades, sortConfig, activeFilters, getSortValue]);
 
   // ── Computed visible columns in display order ──
   const allColumns = useMemo(() => {
@@ -466,18 +708,61 @@ export function TradeTable({ trades, selectedTradeId, onSelectTrade, isRefetchin
         <table className="min-w-[1500px] border-separate border-spacing-0">
           <thead className="sticky top-0 z-10">
             <tr className="bg-[var(--journal-header-bg)] dark:bg-[var(--journal-header-bg-dark)]">
-              {allColumns.map(({ key, label }) => (
-                <th
-                  key={key}
-                  className="border-b border-black/8 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600 dark:border-white/10 dark:text-slate-400"
-                >
-                  {label}
-                </th>
-              ))}
+              {allColumns.map(({ key, label }) => {
+                const isFilterCol = FILTER_COLUMNS.includes(key);
+                const isSortable = !isFilterCol;
+                const active = isSortable && sortConfig.key === key;
+
+                return (
+                  <th
+                    key={key}
+                    onClick={() => handleHeaderClick(key)}
+                    className="relative border-b border-black/8 px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-600 cursor-pointer select-none hover:text-[#FF5900] dark:border-white/10 dark:text-slate-400 dark:hover:text-[#FF5900]"
+                  >
+                    <span className="flex items-center gap-1">
+                      {label}
+                      {isSortable && active && (
+                        <span className="text-[#FF5900]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                      )}
+                      {isFilterCol && activeFilters[key] && activeFilters[key].size > 0 && (
+                        <span className="text-[#FF5900] text-[9px]">●</span>
+                      )}
+                    </span>
+
+                    {/* Filter dropdown for filterable columns */}
+                    {isFilterCol && activeFilterColumn === key && (
+                      <div ref={filterDropdownRef} className="absolute left-0 top-full z-30 mt-2 w-56 rounded-xl border border-black/10 bg-white p-3 shadow-lg dark:border-white/10 dark:bg-[#121212] max-h-60 overflow-y-auto">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 dark:text-gray-400">
+                          {label} Filters
+                        </div>
+                        {Array.from(columnUniqueValues[key] || []).sort().map(value => (
+                          <label key={value} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+                            <input
+                              type="checkbox"
+                              checked={activeFilters[key]?.has(value) || false}
+                              onChange={() => toggleFilterValue(key, value)}
+                              style={{ accentColor: '#FF5900', appearance: 'auto', WebkitAppearance: 'checkbox', MozAppearance: 'checkbox', width: '16px', height: '16px', backgroundColor: 'white', border: '1px solid #9CA3AF', borderRadius: '4px' }}
+                            />
+                            {value}
+                          </label>
+                        ))}
+                        <hr className="my-2 border-gray-200 dark:border-gray-700" />
+                        <button
+                          type="button"
+                          onClick={() => clearColumnFilter(key)}
+                          className="text-xs text-[#FF5900] font-semibold hover:underline"
+                        >
+                          Clear Filter
+                        </button>
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {trades.map((trade) => {
+            {sortedAndFilteredTrades.map((trade) => {
               const tradeId = trade.trade_id || '—';
               const isSelected = tradeId === selectedTradeId;
               const rawPnl = Number(trade.net_pnl || 0);
