@@ -22,6 +22,15 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
       "payload": {...}
     }
 
+    Also polls a sizer_outbox directory for order placement events from the
+    MyPlatformPositionSizer EA.
+
+    Sizer order event shape:
+    {
+      "event_type": "ORDER_PLACED" | "ORDER_MODIFIED" | "ORDER_CLOSED",
+      "payload": { ... }
+    }
+
     Alternate legacy fields accepted:
     - "type"
     - flat payload without nested "payload"
@@ -33,6 +42,8 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
         inbox_dir: str,
         archive_dir: Optional[str] = None,
         poll_interval_seconds: float = 0.25,
+        sizer_outbox_dir: Optional[str] = None,
+        sizer_outbox_archive_dir: Optional[str] = None,
     ):
         super().__init__()
         self._broker_id = broker_id
@@ -43,9 +54,15 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
         self._last_event_type: Optional[str] = None
         self._last_event_file: Optional[str] = None
 
+        # Sizer outbox (order events from PositionSizer EA)
+        self._sizer_outbox_dir = Path(sizer_outbox_dir) if sizer_outbox_dir else Path(inbox_dir).parent / "sizer_outbox"
+        self._sizer_outbox_archive_dir = Path(sizer_outbox_archive_dir) if sizer_outbox_archive_dir else self._sizer_outbox_dir / "processed"
+
     def _connect_impl(self):
         self._inbox_dir.mkdir(parents=True, exist_ok=True)
         self._archive_dir.mkdir(parents=True, exist_ok=True)
+        self._sizer_outbox_dir.mkdir(parents=True, exist_ok=True)
+        self._sizer_outbox_archive_dir.mkdir(parents=True, exist_ok=True)
 
     def _disconnect_impl(self):
         return None
@@ -82,6 +99,28 @@ class MT5FileBridgeAdapter(BaseBrokerAdapter):
                 except (FileNotFoundError, OSError):
                     pass
         time.sleep(self._poll_interval_seconds)
+        return None
+
+    def poll_sizer_order_event(self) -> Optional[Dict[str, Any]]:
+        """
+        Poll the sizer_outbox directory for order placement events from the
+        MyPlatformPositionSizer EA. Returns one event at a time, archiving
+        processed files.
+        """
+        for path, _mtime in self._snapshot_json_files(self._sizer_outbox_dir):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                archived_path = self._sizer_outbox_archive_dir / path.name
+                shutil.move(str(path), str(archived_path))
+                return payload
+            except FileNotFoundError:
+                continue
+            except Exception:
+                failed_path = self._sizer_outbox_archive_dir / f"failed_{int(time.time() * 1000)}_{path.name}"
+                try:
+                    shutil.move(str(path), str(failed_path))
+                except (FileNotFoundError, OSError):
+                    pass
         return None
 
     def _normalize_event(self, raw_event: Dict[str, Any]) -> Dict[str, Any]:

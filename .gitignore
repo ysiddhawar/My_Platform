@@ -1,3 +1,6 @@
+# --- Stray Deployment Artifacts ---
+Position/
+
 # --- Python Specific ---
 # Ignore the virtual environment inside your 'api/' subfolder
 api/venv/
