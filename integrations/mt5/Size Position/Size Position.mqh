@@ -304,7 +304,6 @@ if (ShowATROptions) ON_EVENT(ON_CLICK, m_BtnATRTimeframe, OnClickBtnATRTimeframe
 ON_EVENT(ON_CLICK, m_BtnTrade, OnClickBtnTrade)
 if (QuickRisk1 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk1, OnClickBtnQuickRisk1)
 if (QuickRisk2 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk2, OnClickBtnQuickRisk2)
-if ((AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_MAIN) || (AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_BOTH)) ON_EVENT(ON_CLICK, m_BtnMainTrade, OnClickBtnTrade)
 EVENT_MAP_END(CAppDialog)
 
 //+-------------------+
@@ -646,15 +645,7 @@ bool CPositionSizeCalculator::CreateObjects()
 
     y = row_start + element_height + 3 * v_spacing;
 
-    if ((AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_MAIN) || (AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_BOTH))
-    {
-        if (!ButtonCreate(MainTabList, m_BtnMainTrade, first_column_start, y, first_column_start + narrowest_label_width, y + element_height, "m_BtnMainTrade", TRANSLATION_BUTTON_TRADE))                                        return false;
-        m_BtnMainTrade.ColorBackground(TradeButtonColorAdjusted);
-    }
-    else 
-    {
-        if (!LabelCreate(MainTabList, m_LblEntryLevel, first_column_start, y, first_column_start + narrowest_label_width, y + element_height, "m_LblEntryLevel", TRANSLATION_LABEL_ENTRY + ":"))                                        return false;
-    }
+    if (!LabelCreate(MainTabList, m_LblEntryLevel, first_column_start, y, first_column_start + narrowest_label_width, y + element_height, "m_LblEntryLevel", TRANSLATION_LABEL_ENTRY + ":"))                                        return false;
     // Button to quickly switch between Long/Short trade planning.
     if (!ButtonCreate(MainTabList, m_BtnEntry, first_column_start + narrowest_label_width + v_spacing, y, second_column_start - v_spacing, y + element_height, "m_BtnEntry", EnumToString(sets.TradeDirection), TRANSLATION_TOOLTIP_BUTTON_LONG_SHORT))                    return false;
     if (sets.TradeDirection == Long) m_BtnEntry.ColorBackground(LongButtonColorAdjusted);
@@ -874,6 +865,10 @@ bool CPositionSizeCalculator::CreateObjects()
     if (!LabelCreate(MainTabList, m_LblURL, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblURL", "myplatform.app"))                                         return false;
     m_LblURL.FontSize(8);
     m_LblURL.Color(C'0,115,66'); // Green
+
+    // Trade button at bottom-right of Main tab
+    if (!ButtonCreate(MainTabList, m_BtnTrade, panel_end - tab_button_width, y, panel_end, y + element_height, "m_BtnTrade", TRANSLATION_BUTTON_TRADE))                    return false;
+    m_BtnTrade.ColorBackground(TradeButtonColorAdjusted);
 
 // Portfolio Risk
 
@@ -1137,8 +1132,7 @@ bool CPositionSizeCalculator::CreateObjects()
     // Reset
     y = row_start + element_height + 3 * v_spacing;
 
-    if (!ButtonCreate(TradingTabList, m_BtnTrade, first_column_start, y, first_column_start + tab_button_width, y + element_height, "m_BtnTrade", TRANSLATION_BUTTON_TRADE))                                          return false;
-    m_BtnTrade.ColorBackground(TradeButtonColorAdjusted);
+    // Trade button moved to Main tab (bottom-right)
     if (!LabelCreate(TradingTabList, m_LblTrailingStop, first_column_start + tab_button_width + v_spacing * 2, y, first_column_start + v_spacing + tab_button_width + normal_edit_width, y + element_height, "m_LblTrailingStop", TRANSLATION_LABEL_TRAILING_STOP + ":"))                                          return false;
     if (!EditCreate(TradingTabList, m_EdtTrailingStopPoints, first_column_start + v_spacing * 2 + tab_button_width + normal_edit_width, y, first_column_start + v_spacing * 2 + tab_button_width * 2 + normal_edit_width, y + element_height, "m_EdtTrailingStopPoints", "0"))                                                 return false;
     if (!LabelCreate(TradingTabList, m_LblBreakEven, first_column_start + v_spacing * 5 + tab_button_width * 2 + normal_edit_width, y, first_column_start + v_spacing * 3 + tab_button_width * 2 + normal_edit_width + narrow_edit_width, y + element_height, "m_LblBreakEven", TRANSLATION_LABEL_BREAKEVEN + ":"))                                          return false;
@@ -1767,6 +1761,7 @@ void CPositionSizeCalculator::MoveAndResize()
         ref_point = m_LblRiskM.Top();
         break;
     }
+    m_BtnTrade.Move(m_BtnTrade.Left(), ref_point + col_height);
     m_LblURL.Move(m_LblURL.Left(), ref_point + col_height);
     new_height = m_LblURL.Top() + col_height - Top();
 
@@ -2406,14 +2401,8 @@ void CPositionSizeCalculator::HideMain()
 void CPositionSizeCalculator::ShowMain()
 {
     m_BtnTabMain.ColorBackground(CONTROLS_BUTTON_COLOR_ENABLE);
-    if ((AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_MAIN) || (AdditionalTradeButtons == ADDITIONAL_TRADE_BUTTONS_BOTH))
-    {
-        m_BtnMainTrade.Show();
-    }
-    else
-    {
-        m_LblEntryLevel.Show();
-    }
+    m_LblEntryLevel.Show();
+    m_BtnTrade.Show();
     m_BtnEntry.Show();
     m_EdtEntryLevel.Show();
     if (sets.EntryType != Instant)
