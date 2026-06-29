@@ -12,7 +12,8 @@ private:
     CButton          m_BtnTabMain, m_BtnTabRisk, m_BtnTabMargin, m_BtnTabSwaps, m_BtnTabTrading, m_BtnOrderType, m_BtnAccount, m_BtnLines, m_BtnStopLoss, m_BtnTakeProfit, m_BtnEntry, m_BtnATRTimeframe, m_BtnCommissionType, m_BtnMaxPS, m_BtnTrade, m_BtnTPsInward, m_BtnTPsOutward, m_BtnTradingTPShare, m_BtnQuickRisk1, m_BtnQuickRisk2, m_BtnEntryIncrease, m_BtnEntryDecrease, m_BtnStopLossIncrease, m_BtnStopLossDecrease, m_BtnTakeProfitIncrease, m_BtnTakeProfitDecrease, m_BtnStopPriceIncrease, m_BtnStopPriceDecrease, m_BtnTakeProfitsNumberAdd, m_BtnTakeProfitsNumberRemove, m_BtnMainTrade;
     CCheckBox        m_ChkSpreadAdjustmentSL, m_ChkSpreadAdjustmentTP, m_ChkIgnoreOrdersWithoutSL, m_ChkIgnoreOrdersWithoutTP, m_ChkDisableTradingWhenLinesAreHidden, m_ChkSubtractPositions, m_ChkSubtractPendingOrders, m_ChkDoNotApplyStopLoss, m_ChkDoNotApplyTakeProfit, m_ChkAskForConfirmation, m_ChkCommentAutoSuffix, m_ChkTPLockedOnSL;
     CEdit            m_EdtEntryLevel, m_EdtSL, m_EdtTP, m_EdtStopPrice, m_EdtAccount, m_EdtCommissionSize, m_EdtRiskPIn, m_EdtRiskPRes, m_EdtRiskMIn, m_EdtRiskMRes, m_EdtReward1, m_EdtReward2, m_EdtRR1, m_EdtRR2, m_EdtPosSize, m_EdtPointValue, m_EdtATRPeriod, m_EdtATRMultiplierSL, m_EdtATRMultiplierTP, m_EdtCurRiskM, m_EdtCurRiskP, m_EdtPotRiskM, m_EdtPotRiskP, m_EdtCurProfitM, m_EdtCurProfitP, m_EdtPotProfitM, m_EdtPotProfitP, m_EdtCurL, m_EdtPotL, m_EdtCurrentRRR, m_EdtPotentialRRR, m_EdtPosMargin, m_EdtUsedMargin, m_EdtFreeMargin, m_EdtCustomLeverage, m_EdtMaxPositionSizeByMargin, m_EdtSwapsType, m_EdtSwapsTripleDay, m_EdtSwapsNominalLong, m_EdtSwapsNominalShort, m_EdtSwapsDailyLongLot, m_EdtSwapsDailyShortLot, m_EdtSwapsDailyLongPS, m_EdtSwapsDailyShortPS, m_EdtSwapsYearlyLongLot, m_EdtSwapsYearlyShortLot, m_EdtSwapsYearlyLongPS, m_EdtSwapsYearlyShortPS, m_EdtMagicNumber, m_EdtExpiry, m_EdtCommentary, m_EdtMaxSlippage, m_EdtMaxSpread, m_EdtMaxEntrySLDistance, m_EdtMinEntrySLDistance, m_EdtTrailingStopPoints, m_EdtBreakEvenPoints, m_EdtMaxNumberOfTradesTotal, m_EdtMaxNumberOfTradesPerSymbol, m_EdtMaxPositionSizeTotal, m_EdtMaxPositionSizePerSymbol, m_EdtMaxRiskTotal, m_EdtMaxRiskPerSymbol, m_EdtMaxRiskPercentage, m_EdtTPMultiplier, m_EdtMarginUtilizedCurrent, m_EdtMarginUtilizedPosition, m_EdtMarginUtilizedFuture, m_EdtMUBStartingBalance, m_EdtMaxMarginPercTotal, m_EdtMaxMarginPercPerSymbol, m_EdtMaxMarginPerc;
-    CLabel           m_LblEntryLevel, m_LblEntryWarning, m_LblSL, m_LblSLWarning, m_LblStopPrice, m_LblStopPriceWarning, m_LblOrderType, m_LblCommissionSize, m_LblAdditionalFundsAsterisk, m_LblInput, m_LblResult, m_LblRisk, m_LblRiskM, m_LblReward, m_LblRR, m_LblPosSize, m_LblPointValue, m_LblATRPeriod, m_LblATRMultiplierSL, m_LblATRMultiplierTP, m_LblATRValue, m_LblATRTimeframe, m_LblCurrentRiskMoney, m_LblCurrentRiskPerc, m_LblCurrentProfitMoney, m_LblCurrentProfitPerc, m_LblPotentialRiskMoney, m_LblPotentialRiskPerc, m_LblPotentialProfitMoney, m_LblPotentialProfitPerc, m_LblCurrentLots, m_LblCurrentRRR, m_LblPotentialLots, m_LblPotentialRRR, m_LblCurrentPortfolio, m_LblPotentialPortfolio, m_LblPosMargin, m_LblUsedMargin, m_LblFreeMargin, m_LblCustomLeverage, m_LblAccLeverage, m_LblSymbolLeverage, m_LblMaxPositionSizeByMargin, m_LblSwapsType, m_LblSwapsTripleDay, m_LblSwapsLong, m_LblSwapsShort, m_LblSwapsNominal, m_LblSwapsDaily, m_LblSwapsYearly, m_LblSwapsPerLotDaily, m_LblSwapsPerPSDaily, m_LblSwapsPerLotYearly, m_LblSwapsPerPSYearly, m_LblMagicNumber, m_LblExpiry, m_LblMinutes, m_LblCommentary, m_LblTradingPoints, m_LblMaxSlippage, m_LblMaxSpread, m_LblMaxEntrySLDistance, m_LblMinEntrySLDistance, m_LblTradingLots, m_LblURL, m_LblTradingTP, m_LblTrailingStop, m_LblBreakEven, m_LblMaxNumberOfTrades, m_LblMaxNumberOfTradesTotal, m_LblMaxNumberOfTradesPerSymbol, m_LblMaxPositionSize, m_LblMaxPositionSizeTotal, m_LblMaxPositionSizePerSymbol, m_LblMaxRisk, m_LblMaxRiskTotal, m_LblMaxRiskPerSymbol, m_LblMaxRiskPercentage, m_LblIncludeOrders, m_LblIncludeSymbols, m_LblIncludeDirections, m_LblMarginUtilizedPerc, m_LblMarginUtilizedPercCurrent, m_LblMarginUtilizedPercPosition, m_LblMarginUtilizedPercFuture, m_LblMarginUtilizedBase, m_LblMarginUtilizedBaseCurrency, m_LblMaxMarginPerc, m_LblMaxMarginPercTotal, m_LblMaxMarginPercPerSymbol, m_LblMaxMarginPercFuse;
+    CLabel           m_LblEntryLevel, m_LblEntryWarning, m_LblSL, m_LblSLWarning, m_LblStopPrice, m_LblStopPriceWarning, m_LblOrderType, m_LblCommissionSize, m_LblAdditionalFundsAsterisk, m_LblInput, m_LblResult, m_LblRisk, m_LblRiskM, m_LblReward, m_LblRR, m_LblPosSize, m_LblPointValue, m_LblATRPeriod, m_LblATRMultiplierSL, m_LblATRMultiplierTP, m_LblATRValue, m_LblATRTimeframe, m_LblCurrentRiskMoney, m_LblCurrentRiskPerc, m_LblCurrentProfitMoney, m_LblCurrentProfitPerc, m_LblPotentialRiskMoney, m_LblPotentialRiskPerc, m_LblPotentialProfitMoney, m_LblPotentialProfitPerc, m_LblCurrentLots, m_LblCurrentRRR, m_LblPotentialLots, m_LblPotentialRRR, m_LblCurrentPortfolio, m_LblPotentialPortfolio, m_LblPosMargin, m_LblUsedMargin, m_LblFreeMargin, m_LblCustomLeverage, m_LblAccLeverage, m_LblSymbolLeverage, m_LblMaxPositionSizeByMargin, m_LblSwapsType, m_LblSwapsTripleDay, m_LblSwapsLong, m_LblSwapsShort, m_LblSwapsNominal, m_LblSwapsDaily, m_LblSwapsYearly, m_LblSwapsPerLotDaily, m_LblSwapsPerPSDaily, m_LblSwapsPerLotYearly, m_LblSwapsPerPSYearly, m_LblMagicNumber, m_LblExpiry, m_LblMinutes, m_LblCommentary, m_LblTradingPoints, m_LblMaxSlippage, m_LblMaxSpread, m_LblMaxEntrySLDistance, m_LblMinEntrySLDistance, m_LblTradingLots, m_LblURL, m_LblTradingTP, m_LblTrailingStop, m_LblBreakEven, m_LblMaxNumberOfTrades, m_LblMaxNumberOfTradesTotal, m_LblMaxNumberOfTradesPerSymbol, m_LblMaxPositionSize, m_LblMaxPositionSizeTotal, m_LblMaxPositionSizePerSymbol, m_LblMaxRisk, m_LblMaxRiskTotal, m_LblMaxRiskPerSymbol, m_LblMaxRiskPercentage, m_LblIncludeOrders, m_LblIncludeSymbols, m_LblIncludeDirections, m_LblMarginUtilizedPerc, m_LblMarginUtilizedPercCurrent, m_LblMarginUtilizedPercPosition, m_LblMarginUtilizedPercFuture, m_LblMarginUtilizedBase, m_LblMarginUtilizedBaseCurrency, m_LblMaxMarginPerc, m_LblMaxMarginPercTotal, m_LblMaxMarginPercPerSymbol, m_LblMaxMarginPercFuse, m_LblSetup, m_LblProbability, m_LblSetupCriteria, m_LblConfidenceScore;
+    CComboBox        m_CmbSetup, m_CmbProbability, m_CmbSetupCriteria, m_CmbConfidenceScore;
     CHorizontalRadioGroup m_RgpIncludeOrders, m_RgpIncludeSymbols, m_RgpIncludeDirections, m_RgpMarginUtilizationBase;
 
     string           m_FileName;
@@ -133,6 +134,7 @@ private:
     virtual bool     CheckBoxCreate   (CList* list, CCheckBox& Chk, int X1, int Y1, int X2, int Y2, string Name, string Text, string Tooltip = "\n");
     virtual bool     EditCreate       (CList* list, CEdit&     Edt, int X1, int Y1, int X2, int Y2, string Name, string Text, string Tooltip = "\n");
     virtual bool     LabelCreate      (CList* list, CLabel&    Lbl, int X1, int Y1, int X2, int Y2, string Name, string Text, string Tooltip = "\n");
+    bool             ComboBoxCreate   (CList* list, CComboBox& Cmb, int X1, int Y1, int X2, int Y2, string Name, string Tooltip = "\n");
     bool             RadioGroupCreate (CList* list, CHorizontalRadioGroup& Rgp, int X1, int Y1, int X2, int Y2, string Name, const string &Text[], const long &Widths[], string Tooltip = "\n");
     void             SeekAndDestroyDuplicatePanels();
     int              KeyBasedMultiplier();
@@ -212,6 +214,10 @@ private:
     void OnClickBtnTrade();
     void OnClickBtnQuickRisk1();
     void OnClickBtnQuickRisk2();
+    void OnChangeCmbSetup();
+    void OnChangeCmbProbability();
+    void OnChangeCmbSetupCriteria();
+    void OnChangeCmbConfidenceScore();
 };
 
 // Event Map
@@ -304,6 +310,10 @@ if (ShowATROptions) ON_EVENT(ON_CLICK, m_BtnATRTimeframe, OnClickBtnATRTimeframe
 ON_EVENT(ON_CLICK, m_BtnTrade, OnClickBtnTrade)
 if (QuickRisk1 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk1, OnClickBtnQuickRisk1)
 if (QuickRisk2 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk2, OnClickBtnQuickRisk2)
+ON_EVENT(ON_CHANGE, m_CmbSetup, OnChangeCmbSetup)
+ON_EVENT(ON_CHANGE, m_CmbProbability, OnChangeCmbProbability)
+ON_EVENT(ON_CHANGE, m_CmbSetupCriteria, OnChangeCmbSetupCriteria)
+ON_EVENT(ON_CHANGE, m_CmbConfidenceScore, OnChangeCmbConfidenceScore)
 EVENT_MAP_END(CAppDialog)
 
 //+-------------------+
@@ -443,6 +453,21 @@ bool CPositionSizeCalculator::LabelCreate(CList *list, CLabel &Lbl, int X1, int 
 //+------------+
 //| RadioGroup |
 //+------------+
+bool CPositionSizeCalculator::ComboBoxCreate(CList *list, CComboBox &Cmb, int X1, int Y1, int X2, int Y2, string Name, string Tooltip = "\n")
+{
+    if (!Cmb.Create(m_chart_id, m_name + Name, m_subwin, X1, Y1, X2, Y2))       return false;
+    if (!Add(Cmb))                                                              return false;
+    ObjectSetString(ChartID(), m_name + Name, OBJPROP_TOOLTIP, Tooltip);
+    if (list != NULL)
+    {
+        CStringForList *obj = new CStringForList;
+        obj.Name = Name;
+        obj.Obj = GetPointer(Cmb);
+        list.Add(obj);
+    }
+    return true;
+}
+
 bool CPositionSizeCalculator::RadioGroupCreate(CList *list, CHorizontalRadioGroup &Rgp, int X1, int Y1, int X2, int Y2, string Name, const string &Text[], const long &Widths[], string Tooltip = "\n")
 {
     if (!Rgp.Create(m_chart_id, m_name + Name, m_subwin, X1, Y1, X2, Y2))       return false;
@@ -859,14 +884,29 @@ bool CPositionSizeCalculator::CreateObjects()
         m_EdtPointValue.ColorBackground(CONTROLS_EDIT_COLOR_DISABLE);
     }
 
+    // --- Row: Setup ---
+    y += element_height + v_spacing;
+    if (!LabelCreate(MainTabList, m_LblSetup, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblSetup", "Setup:"))                                        return false;
+    if (!ComboBoxCreate(MainTabList, m_CmbSetup, second_column_start, y, panel_end, y + element_height, "m_CmbSetup"))                                                                          return false;
+
+    // --- Row: Setup Criteria ---
+    y += element_height + v_spacing;
+    if (!LabelCreate(MainTabList, m_LblSetupCriteria, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblSetupCriteria", "Setup Criteria:"))             return false;
+    if (!ComboBoxCreate(MainTabList, m_CmbSetupCriteria, second_column_start, y, panel_end, y + element_height, "m_CmbSetupCriteria"))                                                          return false;
+
+    // --- Row: Probability ---
+    y += element_height + v_spacing;
+    if (!LabelCreate(MainTabList, m_LblProbability, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblProbability", "Probability:"))                    return false;
+    if (!ComboBoxCreate(MainTabList, m_CmbProbability, second_column_start, y, panel_end, y + element_height, "m_CmbProbability"))                                                              return false;
+
+    // --- Row: Confidence Score ---
+    y += element_height + v_spacing;
+    if (!LabelCreate(MainTabList, m_LblConfidenceScore, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblConfidenceScore", "Confidence Score:"))      return false;
+    if (!ComboBoxCreate(MainTabList, m_CmbConfidenceScore, second_column_start, y, panel_end, y + element_height, "m_CmbConfidenceScore"))                                                       return false;
+
     y += element_height + v_spacing;
 
-    // MyPlatform URL
-    if (!LabelCreate(MainTabList, m_LblURL, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblURL", "myplatform.app"))                                         return false;
-    m_LblURL.FontSize(8);
-    m_LblURL.Color(C'0,115,66'); // Green
-
-    // Trade button at bottom-right of Main tab
+    // Trade button at bottom-right of Main tab (URL removed per user request)
     if (!ButtonCreate(MainTabList, m_BtnTrade, panel_end - tab_button_width, y, panel_end, y + element_height, "m_BtnTrade", TRANSLATION_BUTTON_TRADE))                    return false;
     m_BtnTrade.ColorBackground(TradeButtonColorAdjusted);
 
@@ -1743,6 +1783,19 @@ void CPositionSizeCalculator::MoveAndResize()
             m_EdtPointValue.Move(m_EdtPointValue.Left(), ref_point + 1 * col_height);
             ref_point = ref_point + 1 * col_height;
         }
+        // Setup (Row 1)
+        m_LblSetup.Move(m_LblSetup.Left(), ref_point + 1 * col_height);
+        m_CmbSetup.Move(m_CmbSetup.Left(), ref_point + 1 * col_height);
+        // Setup Criteria (Row 2)
+        m_LblSetupCriteria.Move(m_LblSetupCriteria.Left(), ref_point + 2 * col_height);
+        m_CmbSetupCriteria.Move(m_CmbSetupCriteria.Left(), ref_point + 2 * col_height);
+        // Probability (Row 3)
+        m_LblProbability.Move(m_LblProbability.Left(), ref_point + 3 * col_height);
+        m_CmbProbability.Move(m_CmbProbability.Left(), ref_point + 3 * col_height);
+        // Confidence Score (Row 4)
+        m_LblConfidenceScore.Move(m_LblConfidenceScore.Left(), ref_point + 4 * col_height);
+        m_CmbConfidenceScore.Move(m_CmbConfidenceScore.Left(), ref_point + 4 * col_height);
+        ref_point = m_LblConfidenceScore.Top();
         break;
     case RiskTab:
         ref_point = m_EdtPotProfitM.Top();
@@ -1762,8 +1815,7 @@ void CPositionSizeCalculator::MoveAndResize()
         break;
     }
     m_BtnTrade.Move(m_BtnTrade.Left(), ref_point + col_height);
-    m_LblURL.Move(m_LblURL.Left(), ref_point + col_height);
-    new_height = m_LblURL.Top() + col_height - Top();
+    new_height = m_BtnTrade.Top() + col_height - Top();
 
     if (!m_minimized)
     {
@@ -2498,7 +2550,16 @@ void CPositionSizeCalculator::ShowMain()
         m_LblPointValue.Show();
         m_EdtPointValue.Show();
     }
-    m_LblURL.Show();
+    // Setup fields
+    m_LblSetup.Show();
+    m_CmbSetup.Show();
+    m_LblSetupCriteria.Show();
+    m_CmbSetupCriteria.Show();
+    // Probability fields
+    m_LblProbability.Show();
+    m_CmbProbability.Show();
+    m_LblConfidenceScore.Show();
+    m_CmbConfidenceScore.Show();
 }
 
 void CPositionSizeCalculator::HideRisk()
@@ -9006,6 +9067,26 @@ double AdjustPositionSizeByMinMaxStep(double ps)
 //| Rounds a value to N significant figures (default 2).             |
 //| Supports minimum decimal places for rounding.                    |
 //+------------------------------------------------------------------+
+void CPositionSizeCalculator::OnChangeCmbSetup()
+{
+    // Setup dropdown changed - placeholder for future logic
+}
+
+void CPositionSizeCalculator::OnChangeCmbProbability()
+{
+    // Probability dropdown changed - placeholder for future logic
+}
+
+void CPositionSizeCalculator::OnChangeCmbSetupCriteria()
+{
+    // Setup Criteria dropdown changed - placeholder for future logic
+}
+
+void CPositionSizeCalculator::OnChangeCmbConfidenceScore()
+{
+    // Confidence Score dropdown changed - placeholder for future logic
+}
+
 double RoundToSignificant(double value, int digits = 2, int min_decimals = 2)
 {
     if (value == 0.0 || digits <= 0) return 0;

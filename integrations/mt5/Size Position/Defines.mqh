@@ -3,6 +3,7 @@
 //|                                              Size Position for MT5 |
 //+------------------------------------------------------------------+
 #include <Controls\Button.mqh>
+#include <Controls\ComboBox.mqh>
 #include <Controls\Dialog.mqh>
 #include <Controls\CheckBox.mqh>
 #include <Controls\Label.mqh>
