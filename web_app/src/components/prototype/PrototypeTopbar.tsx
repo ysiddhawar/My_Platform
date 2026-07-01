@@ -13,7 +13,7 @@ const titleMap: Record<PrototypeView, string> = {
   'missed-opportunities': 'Missed Opportunities',
   calendar: 'Calendar',
   'position-sizer': 'Position Sizer',
-  'demo-data': 'Data',
+  'settings': 'Settings',
 };
 
 type PrototypeTopbarProps = {

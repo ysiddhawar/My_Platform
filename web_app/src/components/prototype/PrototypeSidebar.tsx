@@ -8,7 +8,7 @@ const items: Array<{ key: PrototypeView; label: string; hint: string }> = [
   { key: 'missed-opportunities', label: 'Missed Opportunities', hint: 'Unexecuted setups' },
   { key: 'calendar', label: 'Calendar', hint: 'Daily result and platform time' },
   { key: 'position-sizer', label: 'Position Sizer', hint: 'Planning and discipline' },
-  { key: 'demo-data', label: 'Data', hint: 'Seed and import' },
+  { key: 'settings', label: 'Settings', hint: 'Configure workspace' },
 ];
 
 type PrototypeSidebarProps = {
@@ -154,8 +154,13 @@ function SidebarItemIcon({ view }: { view: PrototypeView }) {
       return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 3v4M18 3v4M4 9h16" /><rect x="4" y="5" width="16" height="15" rx="2" /></svg>;
     case 'position-sizer':
       return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 5h14v14H5z" /><path d="M9 9h6M9 12h6M9 15h3" /></svg>;
-    case 'demo-data':
-      return <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6" /><path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" /></svg>;
+    case 'settings':
+      return (
+        <svg viewBox="0 0 24 24" className={common} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+      );
   }
 }
 

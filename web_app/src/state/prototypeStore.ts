@@ -18,7 +18,7 @@ export const defaultSidebarOrder: PrototypeView[] = [
   'missed-opportunities',
   'calendar',
   'position-sizer',
-  'demo-data',
+  'settings',
 ];
 
 export const defaultDashboardGroupOrder = [
@@ -332,7 +332,11 @@ export const usePrototypeStore = create<PrototypeState>((set, get) => ({
     }),
   hydrateFromStorage: () => {
     if (get().hydrated) return;
-    const sidebarOrder = loadJson(SIDEBAR_STORAGE_KEY, defaultSidebarOrder);
+    const storedOrder = loadJson<string[]>(SIDEBAR_STORAGE_KEY, defaultSidebarOrder as unknown as string[]);
+    const sidebarOrder = storedOrder.map((key) => (key === 'demo-data' ? 'settings' : key)) as PrototypeView[];
+    if (JSON.stringify(storedOrder) !== JSON.stringify(sidebarOrder)) {
+      persistJson(SIDEBAR_STORAGE_KEY, sidebarOrder);
+    }
     const sidebarCollapsed = false;
     const dashboardGroupOrder = loadJson(DASHBOARD_GROUP_ORDER_KEY, defaultDashboardGroupOrder);
     const dashboardMetricGroup = loadJson(DASHBOARD_METRIC_GROUP_KEY, {} as Record<string, string>);

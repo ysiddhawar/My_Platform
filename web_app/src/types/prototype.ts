@@ -5,7 +5,7 @@ export type PrototypeView =
   | 'missed-opportunities'
   | 'calendar'
   | 'position-sizer'
-  | 'demo-data';
+  | 'settings';
 
 export type AccountSummary = {
   account_id: string;

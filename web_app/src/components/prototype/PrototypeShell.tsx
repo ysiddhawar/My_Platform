@@ -8,7 +8,7 @@ import { PrototypeTopbar } from '@/components/prototype/PrototypeTopbar';
 import { AIInsightsScreen } from '@/components/prototype/screens/AIInsightsScreen';
 import { CalendarScreen } from '@/components/prototype/screens/CalendarScreen';
 import { DashboardScreen } from '@/components/prototype/screens/DashboardScreen';
-import { DemoDataScreen } from '@/components/prototype/screens/DemoDataScreen';
+import { SettingsScreen } from '@/components/prototype/screens/SettingsScreen';
 import { JournalScreen } from '@/components/prototype/screens/JournalScreen';
 import { MissedOpportunitiesScreen } from '@/components/prototype/screens/MissedOpportunitiesScreen';
 import { PositionSizerScreen } from '@/components/prototype/screens/PositionSizerScreen';
@@ -164,7 +164,7 @@ export function PrototypeShell() {
                 {activeView === 'missed-opportunities' ? <MissedOpportunitiesScreen /> : null}
                 {activeView === 'calendar' ? <CalendarScreen /> : null}
                 {activeView === 'position-sizer' ? <PositionSizerScreen /> : null}
-                {activeView === 'demo-data' ? <DemoDataScreen /> : null}
+                {activeView === 'settings' ? <SettingsScreen /> : null}
               </>
             )}
           </main>
