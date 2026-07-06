@@ -186,6 +186,13 @@ enum MARGIN_UTILIZATION_BASE
     MUB_FREE_MARGIN
 };
 
+struct BridgeSetup
+{
+    string name;
+    string criteria_items[];
+    bool   criteria_mandatory[];
+};
+
 struct Settings
 {
     ENTRY_TYPE EntryType;
@@ -267,6 +274,10 @@ struct Settings
     ADDITIONAL_TP_SCHEME LastAdditionalTPScheme;
     MARGIN_UTILIZATION_BASE MarginUtilizationBase;
     double MUBStartingBalance;
+    // MyPlatform Bridge data
+    BridgeSetup bridge_setups[];
+    string selected_setups[];
+    string selected_criteria[];
 } sets;
 
 class CStringForList : public CObject

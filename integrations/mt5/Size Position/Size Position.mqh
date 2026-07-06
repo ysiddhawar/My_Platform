@@ -13,7 +13,17 @@ private:
     CCheckBox        m_ChkSpreadAdjustmentSL, m_ChkSpreadAdjustmentTP, m_ChkIgnoreOrdersWithoutSL, m_ChkIgnoreOrdersWithoutTP, m_ChkDisableTradingWhenLinesAreHidden, m_ChkSubtractPositions, m_ChkSubtractPendingOrders, m_ChkDoNotApplyStopLoss, m_ChkDoNotApplyTakeProfit, m_ChkAskForConfirmation, m_ChkCommentAutoSuffix, m_ChkTPLockedOnSL;
     CEdit            m_EdtEntryLevel, m_EdtSL, m_EdtTP, m_EdtStopPrice, m_EdtAccount, m_EdtCommissionSize, m_EdtRiskPIn, m_EdtRiskPRes, m_EdtRiskMIn, m_EdtRiskMRes, m_EdtReward1, m_EdtReward2, m_EdtRR1, m_EdtRR2, m_EdtPosSize, m_EdtPointValue, m_EdtATRPeriod, m_EdtATRMultiplierSL, m_EdtATRMultiplierTP, m_EdtCurRiskM, m_EdtCurRiskP, m_EdtPotRiskM, m_EdtPotRiskP, m_EdtCurProfitM, m_EdtCurProfitP, m_EdtPotProfitM, m_EdtPotProfitP, m_EdtCurL, m_EdtPotL, m_EdtCurrentRRR, m_EdtPotentialRRR, m_EdtPosMargin, m_EdtUsedMargin, m_EdtFreeMargin, m_EdtCustomLeverage, m_EdtMaxPositionSizeByMargin, m_EdtSwapsType, m_EdtSwapsTripleDay, m_EdtSwapsNominalLong, m_EdtSwapsNominalShort, m_EdtSwapsDailyLongLot, m_EdtSwapsDailyShortLot, m_EdtSwapsDailyLongPS, m_EdtSwapsDailyShortPS, m_EdtSwapsYearlyLongLot, m_EdtSwapsYearlyShortLot, m_EdtSwapsYearlyLongPS, m_EdtSwapsYearlyShortPS, m_EdtMagicNumber, m_EdtExpiry, m_EdtCommentary, m_EdtMaxSlippage, m_EdtMaxSpread, m_EdtMaxEntrySLDistance, m_EdtMinEntrySLDistance, m_EdtTrailingStopPoints, m_EdtBreakEvenPoints, m_EdtMaxNumberOfTradesTotal, m_EdtMaxNumberOfTradesPerSymbol, m_EdtMaxPositionSizeTotal, m_EdtMaxPositionSizePerSymbol, m_EdtMaxRiskTotal, m_EdtMaxRiskPerSymbol, m_EdtMaxRiskPercentage, m_EdtTPMultiplier, m_EdtMarginUtilizedCurrent, m_EdtMarginUtilizedPosition, m_EdtMarginUtilizedFuture, m_EdtMUBStartingBalance, m_EdtMaxMarginPercTotal, m_EdtMaxMarginPercPerSymbol, m_EdtMaxMarginPerc;
     CLabel           m_LblEntryLevel, m_LblEntryWarning, m_LblSL, m_LblSLWarning, m_LblStopPrice, m_LblStopPriceWarning, m_LblOrderType, m_LblCommissionSize, m_LblAdditionalFundsAsterisk, m_LblInput, m_LblResult, m_LblRisk, m_LblRiskM, m_LblReward, m_LblRR, m_LblPosSize, m_LblPointValue, m_LblATRPeriod, m_LblATRMultiplierSL, m_LblATRMultiplierTP, m_LblATRValue, m_LblATRTimeframe, m_LblCurrentRiskMoney, m_LblCurrentRiskPerc, m_LblCurrentProfitMoney, m_LblCurrentProfitPerc, m_LblPotentialRiskMoney, m_LblPotentialRiskPerc, m_LblPotentialProfitMoney, m_LblPotentialProfitPerc, m_LblCurrentLots, m_LblCurrentRRR, m_LblPotentialLots, m_LblPotentialRRR, m_LblCurrentPortfolio, m_LblPotentialPortfolio, m_LblPosMargin, m_LblUsedMargin, m_LblFreeMargin, m_LblCustomLeverage, m_LblAccLeverage, m_LblSymbolLeverage, m_LblMaxPositionSizeByMargin, m_LblSwapsType, m_LblSwapsTripleDay, m_LblSwapsLong, m_LblSwapsShort, m_LblSwapsNominal, m_LblSwapsDaily, m_LblSwapsYearly, m_LblSwapsPerLotDaily, m_LblSwapsPerPSDaily, m_LblSwapsPerLotYearly, m_LblSwapsPerPSYearly, m_LblMagicNumber, m_LblExpiry, m_LblMinutes, m_LblCommentary, m_LblTradingPoints, m_LblMaxSlippage, m_LblMaxSpread, m_LblMaxEntrySLDistance, m_LblMinEntrySLDistance, m_LblTradingLots, m_LblURL, m_LblTradingTP, m_LblTrailingStop, m_LblBreakEven, m_LblMaxNumberOfTrades, m_LblMaxNumberOfTradesTotal, m_LblMaxNumberOfTradesPerSymbol, m_LblMaxPositionSize, m_LblMaxPositionSizeTotal, m_LblMaxPositionSizePerSymbol, m_LblMaxRisk, m_LblMaxRiskTotal, m_LblMaxRiskPerSymbol, m_LblMaxRiskPercentage, m_LblIncludeOrders, m_LblIncludeSymbols, m_LblIncludeDirections, m_LblMarginUtilizedPerc, m_LblMarginUtilizedPercCurrent, m_LblMarginUtilizedPercPosition, m_LblMarginUtilizedPercFuture, m_LblMarginUtilizedBase, m_LblMarginUtilizedBaseCurrency, m_LblMaxMarginPerc, m_LblMaxMarginPercTotal, m_LblMaxMarginPercPerSymbol, m_LblMaxMarginPercFuse, m_LblSetup, m_LblProbability, m_LblSetupCriteria, m_LblConfidenceScore;
-    CComboBox        m_CmbSetup, m_CmbProbability, m_CmbSetupCriteria, m_CmbConfidenceScore;
+    CComboBox        m_CmbProbability, m_CmbConfidenceScore;
+    CButton          m_BtnSetup, m_BtnSetupCriteria;
+    // Popup dialog state (chart-object overlay)
+    int              m_PopupType;              // 0=none, 1=setup, 2=criteria
+    int              m_PopupItemCount;
+    string           m_PopupNames[];
+    bool             m_PopupStates[];
+    bool             m_PopupSelectAllState;
+    bool             m_PopupVisible;
+    int              m_PopupItemH;
+    int              m_PopupVgap;
     CHorizontalRadioGroup m_RgpIncludeOrders, m_RgpIncludeSymbols, m_RgpIncludeDirections, m_RgpMarginUtilizationBase;
 
     string           m_FileName;
@@ -39,6 +49,10 @@ private:
     string           RadiogroupOnFile, RadiogroupOffFile;
 
 public:
+    CButton* GetBtnSetup() { return &m_BtnSetup; }
+    CButton* GetBtnSetupCriteria() { return &m_BtnSetupCriteria; }
+    void HandlePopupChartClick(const string obj_name);
+
     CPositionSizeCalculator(void);
    ~CPositionSizeCalculator(void);
 
@@ -214,10 +228,13 @@ private:
     void OnClickBtnTrade();
     void OnClickBtnQuickRisk1();
     void OnClickBtnQuickRisk2();
-    void OnChangeCmbSetup();
+    void OnClickBtnSetup();
     void OnChangeCmbProbability();
-    void OnChangeCmbSetupCriteria();
+    void OnClickBtnSetupCriteria();
     void OnChangeCmbConfidenceScore();
+    void HidePopup();
+    void ShowSetupPopup();
+    void ShowCriteriaPopup();
 };
 
 // Event Map
@@ -310,9 +327,9 @@ if (ShowATROptions) ON_EVENT(ON_CLICK, m_BtnATRTimeframe, OnClickBtnATRTimeframe
 ON_EVENT(ON_CLICK, m_BtnTrade, OnClickBtnTrade)
 if (QuickRisk1 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk1, OnClickBtnQuickRisk1)
 if (QuickRisk2 > 0) ON_EVENT(ON_CLICK, m_BtnQuickRisk2, OnClickBtnQuickRisk2)
-ON_EVENT(ON_CHANGE, m_CmbSetup, OnChangeCmbSetup)
+ON_EVENT(ON_CLICK, m_BtnSetup, OnClickBtnSetup)
 ON_EVENT(ON_CHANGE, m_CmbProbability, OnChangeCmbProbability)
-ON_EVENT(ON_CHANGE, m_CmbSetupCriteria, OnChangeCmbSetupCriteria)
+ON_EVENT(ON_CLICK, m_BtnSetupCriteria, OnClickBtnSetupCriteria)
 ON_EVENT(ON_CHANGE, m_CmbConfidenceScore, OnChangeCmbConfidenceScore)
 EVENT_MAP_END(CAppDialog)
 
@@ -887,12 +904,12 @@ bool CPositionSizeCalculator::CreateObjects()
     // --- Row: Setup ---
     y += element_height + v_spacing;
     if (!LabelCreate(MainTabList, m_LblSetup, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblSetup", "Setup:"))                                        return false;
-    if (!ComboBoxCreate(MainTabList, m_CmbSetup, second_column_start, y, panel_end, y + element_height, "m_CmbSetup"))                                                                          return false;
+    if (!ButtonCreate(MainTabList, m_BtnSetup, second_column_start, y, panel_end, y + element_height, "m_BtnSetup", "Select..."))                                                                          return false;
 
     // --- Row: Setup Criteria ---
     y += element_height + v_spacing;
     if (!LabelCreate(MainTabList, m_LblSetupCriteria, first_column_start, y, first_column_start + normal_label_width, y + element_height, "m_LblSetupCriteria", "Setup Criteria:"))             return false;
-    if (!ComboBoxCreate(MainTabList, m_CmbSetupCriteria, second_column_start, y, panel_end, y + element_height, "m_CmbSetupCriteria"))                                                          return false;
+    if (!ButtonCreate(MainTabList, m_BtnSetupCriteria, second_column_start, y, panel_end, y + element_height, "m_BtnSetupCriteria", "Select..."))                                                                          return false;
 
     // --- Row: Probability ---
     y += element_height + v_spacing;
@@ -1785,10 +1802,10 @@ void CPositionSizeCalculator::MoveAndResize()
         }
         // Setup (Row 1)
         m_LblSetup.Move(m_LblSetup.Left(), ref_point + 1 * col_height);
-        m_CmbSetup.Move(m_CmbSetup.Left(), ref_point + 1 * col_height);
+        m_BtnSetup.Move(m_BtnSetup.Left(), ref_point + 1 * col_height);
         // Setup Criteria (Row 2)
         m_LblSetupCriteria.Move(m_LblSetupCriteria.Left(), ref_point + 2 * col_height);
-        m_CmbSetupCriteria.Move(m_CmbSetupCriteria.Left(), ref_point + 2 * col_height);
+        m_BtnSetupCriteria.Move(m_BtnSetupCriteria.Left(), ref_point + 2 * col_height);
         // Probability (Row 3)
         m_LblProbability.Move(m_LblProbability.Left(), ref_point + 3 * col_height);
         m_CmbProbability.Move(m_CmbProbability.Left(), ref_point + 3 * col_height);
@@ -2552,9 +2569,9 @@ void CPositionSizeCalculator::ShowMain()
     }
     // Setup fields
     m_LblSetup.Show();
-    m_CmbSetup.Show();
+    m_BtnSetup.Show();
     m_LblSetupCriteria.Show();
-    m_CmbSetupCriteria.Show();
+    m_BtnSetupCriteria.Show();
     // Probability fields
     m_LblProbability.Show();
     m_CmbProbability.Show();
@@ -9067,24 +9084,438 @@ double AdjustPositionSizeByMinMaxStep(double ps)
 //| Rounds a value to N significant figures (default 2).             |
 //| Supports minimum decimal places for rounding.                    |
 //+------------------------------------------------------------------+
-void CPositionSizeCalculator::OnChangeCmbSetup()
-{
-    // Setup dropdown changed - placeholder for future logic
+// Helper to check if string is in array
+bool IsStringInArray(const string &arr[], const string &value) {
+    for (int i = 0; i < ArraySize(arr); i++) {
+        if (arr[i] == value) return true;
+    }
+    return false;
 }
 
-void CPositionSizeCalculator::OnChangeCmbProbability()
-{
-    // Probability dropdown changed - placeholder for future logic
+// Helper to remove string from array
+int RemoveStringFromArray(string &arr[], const string &value) {
+    int count = ArraySize(arr);
+    for (int i = 0; i < count; i++) {
+        if (arr[i] == value) {
+            for (int j = i; j < count - 1; j++) arr[j] = arr[j + 1];
+            ArrayResize(arr, count - 1);
+            return 1;
+        }
+    }
+    return 0;
 }
 
-void CPositionSizeCalculator::OnChangeCmbSetupCriteria()
+//+------------------------------------------------------------------+
+//|                 Popup Chart-Object Overlay                        |
+//|   Uses OBJ_RECTANGLE_LABEL / OBJ_BUTTON / OBJ_LABEL chart        |
+//|   objects so dynamic items don't fight CAppDialog's event map.   |
+//|   All popup clicks are dispatched via HandlePopupChartClick()    |
+//|   from the EA's OnChartEvent().                                  |
+//+------------------------------------------------------------------+
+void CPositionSizeCalculator::ShowSetupPopup()
 {
-    // Setup Criteria dropdown changed - placeholder for future logic
+    if (ArraySize(sets.bridge_setups) == 0) {
+        Alert("No setups loaded. Configure setups in the MyPlatform web app Settings page first.");
+        return;
+    }
+
+    m_PopupType     = 1;
+    m_PopupItemH    = 24;
+    m_PopupVgap     = 2;
+    m_PopupVisible  = true;
+
+    // ---- build name list + pre-select current ----
+    int count = ArraySize(sets.bridge_setups);
+    ArrayResize(m_PopupNames, count);
+    ArrayResize(m_PopupStates, count);
+    int pre_selected = -1;
+    for (int i = 0; i < count; i++) {
+        m_PopupNames[i] = sets.bridge_setups[i].name;
+        m_PopupStates[i] = false;
+        for (int j = 0; j < ArraySize(sets.selected_setups); j++) {
+            if (sets.selected_setups[j] == m_PopupNames[i]) {
+                pre_selected = i;
+                m_PopupStates[i] = true;
+                break;
+            }
+        }
+    }
+    m_PopupItemCount = count;
+
+    // ---- dimensions ----
+    int list_h  = count * m_PopupItemH + (count - 1) * m_PopupVgap;
+    int header  = 26;
+    int footer  = 36;
+    int popup_w = 260;
+    int popup_h = header + list_h + footer;
+    int popup_l = (PanelWidth - popup_w) / 2;
+    int popup_t = (Height() - popup_h) / 2;
+
+    long ch = ChartID();
+    string pref = m_name + "popup_";
+
+    // ---- background ---- (OBJ_RECTANGLE_LABEL)
+    ObjectCreate(ch, pref + "bg", OBJ_RECTANGLE_LABEL, 0, 0, 0);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_XDISTANCE, popup_l);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_YDISTANCE, popup_t);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_XSIZE, popup_w);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_YSIZE, popup_h);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_BACK, true);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_COLOR, clrWhite);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_BORDER_COLOR, clrDarkGray);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_BORDER_TYPE, BORDER_FLAT);
+    ObjectSetInteger(ch, pref + "bg", OBJPROP_WIDTH, 1);
+
+    // ---- title ---- (OBJ_LABEL)
+    ObjectCreate(ch, pref + "title", OBJ_LABEL, 0, 0, 0);
+    ObjectSetInteger(ch, pref + "title", OBJPROP_XDISTANCE, popup_l + 8);
+    ObjectSetInteger(ch, pref + "title", OBJPROP_YDISTANCE, popup_t + 4);
+    ObjectSetInteger(ch, pref + "title", OBJPROP_COLOR, clrBlack);
+    ObjectSetInteger(ch, pref + "title", OBJPROP_FONTSIZE, 12);
+    ObjectSetString(ch, pref + "title", OBJPROP_TEXT, "Select Setup");
+
+    // ---- item buttons ----
+    for (int i = 0; i < count; i++) {
+        string on = pref + "item_" + IntegerToString(i);
+        int cy = popup_t + header + i * (m_PopupItemH + m_PopupVgap);
+        ObjectCreate(ch, on, OBJ_BUTTON, 0, 0, 0);
+        ObjectSetInteger(ch, on, OBJPROP_XDISTANCE, popup_l + 4);
+        ObjectSetInteger(ch, on, OBJPROP_YDISTANCE, cy);
+        ObjectSetInteger(ch, on, OBJPROP_XSIZE, popup_w - 8);
+        ObjectSetInteger(ch, on, OBJPROP_YSIZE, m_PopupItemH);
+        ObjectSetInteger(ch, on, OBJPROP_CORNER, 0);
+        ObjectSetInteger(ch, on, OBJPROP_SELECTABLE, false);
+        // selected → "(*)" prefix, unselected → "( )" prefix
+        if (m_PopupStates[i]) {
+            ObjectSetString(ch, on, OBJPROP_TEXT, "(*) " + m_PopupNames[i]);
+            ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrLightBlue);
+        } else {
+            ObjectSetString(ch, on, OBJPROP_TEXT, "( ) " + m_PopupNames[i]);
+            ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrWhiteSmoke);
+        }
+    }
+
+    // ---- OK / Cancel buttons ----
+    int btn_y = popup_t + popup_h - footer + 6;
+    int btn_w = 60;
+
+    ObjectCreate(ch, pref + "cancel", OBJ_BUTTON, 0, 0, 0);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_XDISTANCE, popup_l + 8);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_YDISTANCE, btn_y);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_XSIZE, btn_w);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_YSIZE, 24);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_CORNER, 0);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_SELECTABLE, false);
+    ObjectSetInteger(ch, pref + "cancel", OBJPROP_BGCOLOR, clrLightGray);
+    ObjectSetString(ch, pref + "cancel", OBJPROP_TEXT, "Cancel");
+
+    ObjectCreate(ch, pref + "ok", OBJ_BUTTON, 0, 0, 0);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_XDISTANCE, popup_l + popup_w - 8 - btn_w);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_YDISTANCE, btn_y);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_XSIZE, btn_w);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_YSIZE, 24);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_CORNER, 0);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_SELECTABLE, false);
+    ObjectSetInteger(ch, pref + "ok", OBJPROP_BGCOLOR, clrLightGreen);
+    ObjectSetString(ch, pref + "ok", OBJPROP_TEXT, "OK");
+
+    ChartRedraw();
+}
+
+void CPositionSizeCalculator::ShowCriteriaPopup()
+{
+    if (ArraySize(sets.selected_setups) == 0) {
+        Alert("Select a setup first.");
+        return;
+    }
+
+    string sel_name = sets.selected_setups[0];
+
+    for (int si = 0; si < ArraySize(sets.bridge_setups); si++) {
+        if (sets.bridge_setups[si].name != sel_name) continue;
+
+        int cc = ArraySize(sets.bridge_setups[si].criteria_items);
+        if (cc == 0) {
+            Alert("No criteria available for this setup.");
+            return;
+        }
+
+        m_PopupType     = 2;
+        m_PopupItemH    = 24;
+        m_PopupVgap     = 2;
+        m_PopupVisible  = true;
+
+        // ---- build name/state arrays ----
+        m_PopupItemCount = cc;
+        ArrayResize(m_PopupNames, cc);
+        ArrayResize(m_PopupStates, cc);
+        for (int i = 0; i < cc; i++) {
+            m_PopupNames[i] = sets.bridge_setups[si].criteria_items[i];
+            m_PopupStates[i] = IsStringInArray(sets.selected_criteria, m_PopupNames[i]);
+        }
+
+        // ---- dimensions (one extra row for Select All) ----
+        int total_rows = cc + 1;
+        int list_h  = total_rows * m_PopupItemH + (total_rows - 1) * m_PopupVgap;
+        int header  = 26;
+        int footer  = 36;
+        int popup_w = 280;
+        int popup_h = header + list_h + footer;
+        int popup_l = (PanelWidth - popup_w) / 2;
+        int popup_t = (Height() - popup_h) / 2;
+
+        long ch = ChartID();
+        string pref = m_name + "popup_";
+
+        // ---- background ----
+        ObjectCreate(ch, pref + "bg", OBJ_RECTANGLE_LABEL, 0, 0, 0);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_XDISTANCE, popup_l);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_YDISTANCE, popup_t);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_XSIZE, popup_w);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_YSIZE, popup_h);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_BACK, true);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_COLOR, clrWhite);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_BORDER_COLOR, clrDarkGray);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_BORDER_TYPE, BORDER_FLAT);
+        ObjectSetInteger(ch, pref + "bg", OBJPROP_WIDTH, 1);
+
+        // ---- title ----
+        ObjectCreate(ch, pref + "title", OBJ_LABEL, 0, 0, 0);
+        ObjectSetInteger(ch, pref + "title", OBJPROP_XDISTANCE, popup_l + 8);
+        ObjectSetInteger(ch, pref + "title", OBJPROP_YDISTANCE, popup_t + 4);
+        ObjectSetInteger(ch, pref + "title", OBJPROP_COLOR, clrBlack);
+        ObjectSetInteger(ch, pref + "title", OBJPROP_FONTSIZE, 12);
+        ObjectSetString(ch, pref + "title", OBJPROP_TEXT, "Criteria – " + sel_name);
+
+        // ---- Select All button ----
+        m_PopupSelectAllState = true;
+        for (int i = 0; i < cc; i++) { if (!m_PopupStates[i]) { m_PopupSelectAllState = false; break; } }
+
+        ObjectCreate(ch, pref + "sel_all", OBJ_BUTTON, 0, 0, 0);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_XDISTANCE, popup_l + 4);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_YDISTANCE, popup_t + header);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_XSIZE, popup_w - 8);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_YSIZE, m_PopupItemH);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_CORNER, 0);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(ch, pref + "sel_all", OBJPROP_BGCOLOR, clrWhiteSmoke);
+        if (m_PopupSelectAllState)
+            ObjectSetString(ch, pref + "sel_all", OBJPROP_TEXT, "[*] Select All");
+        else
+            ObjectSetString(ch, pref + "sel_all", OBJPROP_TEXT, "[ ] Select All");
+
+        // ---- item buttons ----
+        for (int i = 0; i < cc; i++) {
+            string on = pref + "item_" + IntegerToString(i);
+            int cy = popup_t + header + (i + 1) * (m_PopupItemH + m_PopupVgap);
+            ObjectCreate(ch, on, OBJ_BUTTON, 0, 0, 0);
+            ObjectSetInteger(ch, on, OBJPROP_XDISTANCE, popup_l + 4);
+            ObjectSetInteger(ch, on, OBJPROP_YDISTANCE, cy);
+            ObjectSetInteger(ch, on, OBJPROP_XSIZE, popup_w - 8);
+            ObjectSetInteger(ch, on, OBJPROP_YSIZE, m_PopupItemH);
+            ObjectSetInteger(ch, on, OBJPROP_CORNER, 0);
+            ObjectSetInteger(ch, on, OBJPROP_SELECTABLE, false);
+            if (m_PopupStates[i]) {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[*] " + m_PopupNames[i]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrLightBlue);
+            } else {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[ ] " + m_PopupNames[i]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrWhiteSmoke);
+            }
+        }
+
+        // ---- OK / Cancel buttons ----
+        int btn_y = popup_t + popup_h - footer + 6;
+        int btn_w = 60;
+
+        ObjectCreate(ch, pref + "cancel", OBJ_BUTTON, 0, 0, 0);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_XDISTANCE, popup_l + 8);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_YDISTANCE, btn_y);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_XSIZE, btn_w);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_YSIZE, 24);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_CORNER, 0);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(ch, pref + "cancel", OBJPROP_BGCOLOR, clrLightGray);
+        ObjectSetString(ch, pref + "cancel", OBJPROP_TEXT, "Cancel");
+
+        ObjectCreate(ch, pref + "ok", OBJ_BUTTON, 0, 0, 0);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_XDISTANCE, popup_l + popup_w - 8 - btn_w);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_YDISTANCE, btn_y);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_XSIZE, btn_w);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_YSIZE, 24);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_CORNER, 0);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_SELECTABLE, false);
+        ObjectSetInteger(ch, pref + "ok", OBJPROP_BGCOLOR, clrLightGreen);
+        ObjectSetString(ch, pref + "ok", OBJPROP_TEXT, "OK");
+
+        ChartRedraw();
+        return;
+    }
+    Alert("Selected setup not found in loaded setups.");
+}
+
+//+------------------------------------------------------------------+
+//| Called from the EA's OnChartEvent for popup chart-object clicks  |
+//+------------------------------------------------------------------+
+void CPositionSizeCalculator::HandlePopupChartClick(const string obj_name)
+{
+    if (!m_PopupVisible || m_PopupType == 0) return;
+
+    string pref = m_name + "popup_";
+
+    // ---- OK ----
+    if (obj_name == pref + "ok") {
+        if (m_PopupType == 1) {
+            // Setup dialog (radio) — find selected item
+            for (int i = 0; i < m_PopupItemCount; i++) {
+                if (m_PopupStates[i]) {
+                    ArrayResize(sets.selected_criteria, 0);
+                    ArrayResize(sets.selected_setups, 1);
+                    sets.selected_setups[0] = m_PopupNames[i];
+                    m_BtnSetup.Text("Selected: " + m_PopupNames[i]);
+                    m_BtnSetupCriteria.Text("Select...");
+                    HidePopup();
+                    return;
+                }
+            }
+            // nothing selected → keep current
+        } else if (m_PopupType == 2) {
+            // Criteria dialog (multi) — collect checked items
+            ArrayResize(sets.selected_criteria, 0);
+            int cnt = 0;
+            for (int i = 0; i < m_PopupItemCount; i++) {
+                if (m_PopupStates[i]) {
+                    ArrayResize(sets.selected_criteria, cnt + 1);
+                    sets.selected_criteria[cnt] = m_PopupNames[i];
+                    cnt++;
+                }
+            }
+            if (cnt > 0)
+                m_BtnSetupCriteria.Text(StringFormat("%d criteria", cnt));
+            else
+                m_BtnSetupCriteria.Text("Select...");
+        }
+        HidePopup();
+        return;
+    }
+
+    // ---- Cancel ----
+    if (obj_name == pref + "cancel") {
+        HidePopup();
+        return;
+    }
+
+    // ---- Select All (criteria popup only) ----
+    if (obj_name == pref + "sel_all" && m_PopupType == 2) {
+        m_PopupSelectAllState = !m_PopupSelectAllState;
+        long ch = ChartID();
+        for (int i = 0; i < m_PopupItemCount; i++) {
+            m_PopupStates[i] = m_PopupSelectAllState;
+            string on = pref + "item_" + IntegerToString(i);
+            if (m_PopupSelectAllState) {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[*] " + m_PopupNames[i]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrLightBlue);
+            } else {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[ ] " + m_PopupNames[i]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrWhiteSmoke);
+            }
+        }
+        if (m_PopupSelectAllState)
+            ObjectSetString(ch, pref + "sel_all", OBJPROP_TEXT, "[*] Select All");
+        else
+            ObjectSetString(ch, pref + "sel_all", OBJPROP_TEXT, "[ ] Select All");
+        ChartRedraw();
+        return;
+    }
+
+    // ---- Item click ----
+    string item_prefix = pref + "item_";
+    if (StringFind(obj_name, item_prefix) == 0) {
+        string idx_str = StringSubstr(obj_name, StringLen(item_prefix));
+        int idx = (int)StringToInteger(idx_str);
+        if (idx < 0 || idx >= m_PopupItemCount) return;
+
+        long ch = ChartID();
+
+        if (m_PopupType == 1) {
+            // Radio-style: select clicked, deselect others
+            for (int i = 0; i < m_PopupItemCount; i++) {
+                m_PopupStates[i] = (i == idx);
+                string on = pref + "item_" + IntegerToString(i);
+                if (i == idx) {
+                    ObjectSetString(ch, on, OBJPROP_TEXT, "(*) " + m_PopupNames[i]);
+                    ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrLightBlue);
+                } else {
+                    ObjectSetString(ch, on, OBJPROP_TEXT, "( ) " + m_PopupNames[i]);
+                    ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrWhiteSmoke);
+                }
+            }
+        } else if (m_PopupType == 2) {
+            // Checkbox-style: toggle
+            m_PopupStates[idx] = !m_PopupStates[idx];
+            string on = pref + "item_" + IntegerToString(idx);
+            if (m_PopupStates[idx]) {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[*] " + m_PopupNames[idx]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrLightBlue);
+            } else {
+                ObjectSetString(ch, on, OBJPROP_TEXT, "[ ] " + m_PopupNames[idx]);
+                ObjectSetInteger(ch, on, OBJPROP_BGCOLOR, clrWhiteSmoke);
+            }
+            // Update Select All state
+            bool all_checked = true;
+            for (int i = 0; i < m_PopupItemCount; i++) { if (!m_PopupStates[i]) { all_checked = false; break; } }
+            m_PopupSelectAllState = all_checked;
+            string sa = pref + "sel_all";
+            if (all_checked)
+                ObjectSetString(ch, sa, OBJPROP_TEXT, "[*] Select All");
+            else
+                ObjectSetString(ch, sa, OBJPROP_TEXT, "[ ] Select All");
+        }
+        ChartRedraw();
+    }
+}
+
+void CPositionSizeCalculator::HidePopup()
+{
+    m_PopupVisible = false;
+    m_PopupType    = 0;
+
+    long ch = ChartID();
+    string pref = m_name + "popup_";
+
+    // Destroy all chart objects with the popup prefix
+    // (bg, title, ok, cancel, sel_all, item_0 … item_N)
+    for (int i = 0; i < 100; i++) {
+        string on = pref + "item_" + IntegerToString(i);
+        if (ObjectFind(ch, on) >= 0) ObjectDelete(ch, on);
+    }
+    ObjectDelete(ch, pref + "sel_all");
+    ObjectDelete(ch, pref + "ok");
+    ObjectDelete(ch, pref + "cancel");
+    ObjectDelete(ch, pref + "title");
+    ObjectDelete(ch, pref + "bg");
+
+    ChartRedraw();
+}
+
+void CPositionSizeCalculator::OnClickBtnSetup()
+{
+    ShowSetupPopup();
+}
+
+void CPositionSizeCalculator::OnClickBtnSetupCriteria()
+{
+    ShowCriteriaPopup();
 }
 
 void CPositionSizeCalculator::OnChangeCmbConfidenceScore()
 {
-    // Confidence Score dropdown changed - placeholder for future logic
+    // Confidence Score dropdown changed — placeholder for future logic
+}
+
+void CPositionSizeCalculator::OnChangeCmbProbability()
+{
+    // Probability dropdown changed — placeholder for future logic
 }
 
 double RoundToSignificant(double value, int digits = 2, int min_decimals = 2)

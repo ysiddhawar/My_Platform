@@ -717,8 +717,15 @@ void OnChartEvent(const int id,
     }
 
     // Clicks on objects that cannot be processed via the class Event Map.
-    if (id == CHARTEVENT_OBJECT_CLICK) 
+    if (id == CHARTEVENT_OBJECT_CLICK)
     {
+        // ---- MyPlatform popup overlay clicks ----
+        if (StringFind(sparam, ExtDialog.Name() + "popup_") == 0)
+        {
+            ExtDialog.HandlePopupChartClick(sparam);
+            ChartRedraw();
+            return;
+        }
         // This cannot be done using the panel's event handler because the outside trade button isn't added to its list of controls.
         if (sparam == ExtDialog.Name() + "m_OutsideTradeButton")
         {
@@ -1045,6 +1052,7 @@ void OnTrade()
 {
     ExtDialog.RefreshValues();
     ChartRedraw();
+    MPTimerHandler();
 }
 
 //+------------------------------------------------------------------+
@@ -1061,6 +1069,7 @@ void OnTimer()
     if (GetTickCount64() - LastRecalculationTime < 1000) return; // Do not recalculate on timer if less than 1 second passed.
     ExtDialog.RefreshValues();
     ChartRedraw();
+    MPTimerHandler();
 }
 
 // true = dark mode
@@ -1146,19 +1155,138 @@ void MPWriteEvent(const string event_type, const string payload_json)
    int handle = FileOpen(filename, FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON);
    if(handle != INVALID_HANDLE) { FileWriteString(handle, document); FileClose(handle); }
 }
+// MyPlatform Bridge global config data
+string g_setup_names[];
+
 void MPTimerHandler()
 {
+   static ulong last_check = 0;
+   if (GetTickCount64() - last_check < (ulong)(MPPollIntervalSec * 1000)) return;
+   last_check = GetTickCount64();
+   
    string search_pattern = MPSizerInboxDir + "\\config_*.json";
    string first_filename;
    long search_handle = FileFindFirst(search_pattern, first_filename, FILE_COMMON);
-   if(search_handle == INVALID_HANDLE) return;
-   if(StringLen(first_filename) > 0)
-   {
-      string full_path = MPSizerInboxDir + "\\" + first_filename;
-      int handle = FileOpen(full_path, FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
-      if(handle != INVALID_HANDLE) { string content; while(!FileIsEnding(handle)) content += FileReadString(handle); FileClose(handle); FileDelete(full_path); }
-   }
+   if (search_handle == INVALID_HANDLE) return;
+   
+   string filename_to_process = "";
+   do {
+      filename_to_process = first_filename;
+   } while (FileFindNext(search_handle, first_filename));
    FileFindClose(search_handle);
+   
+   if (filename_to_process == "") return;
+   
+   string full_path = MPSizerInboxDir + "\\" + filename_to_process;
+   int handle = FileOpen(full_path, FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON);
+   if (handle != INVALID_HANDLE) {
+      string file_content = "";
+      while (!FileIsEnding(handle)) file_content += FileReadString(handle);
+      FileClose(handle);
+      FileDelete(full_path);
+      ParseSetupConfig(file_content);
+      if (CheckPointer(ExtDialog) != POINTER_INVALID) {
+         ExtDialog.GetBtnSetup().Text(StringFormat("%d setup(s)", ArraySize(g_setup_names)));
+         ExtDialog.GetBtnSetupCriteria().Text("Select...");
+         ChartRedraw();
+      }
+   }
+}
+
+void ParseSetupConfig(const string &json_content)
+{
+    // Load settings via ExtDialog (global sets)
+    ExtDialog.LoadSettingsFromDisk();
+    
+    // Reset arrays
+    ArrayResize(sets.bridge_setups, 0);
+    ArrayResize(sets.selected_setups, 0);
+    ArrayResize(sets.selected_criteria, 0);
+    ArrayResize(g_setup_names, 0);
+    
+    // Find "setups" array in JSON
+    int setups_pos = StringFind(json_content, "\"setups\"");
+    if (setups_pos < 0) return;
+    int array_start = StringFind(json_content, "[", setups_pos);
+    if (array_start < 0) return;
+    
+    int brace_depth = 0;
+    int obj_start = -1;
+    int total = 0;
+    
+    for (int i = array_start; i < StringLen(json_content); i++) {
+        ushort ch = StringGetCharacter(json_content, i);
+        if (ch == '{' && brace_depth == 0) { obj_start = i; brace_depth = 1; }
+        else if (ch == '{') { brace_depth++; }
+        else if (ch == '}') {
+            brace_depth--;
+            if (brace_depth == 0 && obj_start >= 0) {
+                string obj_text = StringSubstr(json_content, obj_start, i - obj_start + 1);
+                
+                // Extract "name"
+                int nq1 = StringFind(obj_text, "\"name\":\"");
+                if (nq1 >= 0) {
+                    nq1 += 7;
+                    int nq2 = StringFind(obj_text, "\"", nq1);
+                    if (nq2 > nq1) {
+                        ArrayResize(g_setup_names, total + 1);
+                        ArrayResize(sets.bridge_setups, total + 1);
+                        string name = StringSubstr(obj_text, nq1, nq2 - nq1);
+                        g_setup_names[total] = name;
+                        sets.bridge_setups[total].name = name;
+                        
+                        // Parse criteria (string array)
+                        int cp = StringFind(obj_text, "\"criteria\":[");
+                        ArrayResize(sets.bridge_setups[total].criteria_items, 0);
+                        if (cp >= 0) {
+                            int ci = 0;
+                            int cq1 = cp + 12;
+                            while (cq1 < StringLen(obj_text)) {
+                                int cq2 = StringFind(obj_text, "\"", cq1 + 1);
+                                if (cq2 < 0) break;
+                                string cval = StringSubstr(obj_text, cq1 + 1, cq2 - cq1 - 1);
+                                if (cval != "" && cval != ",") {
+                                    ArrayResize(sets.bridge_setups[total].criteria_items, ci + 1);
+                                    sets.bridge_setups[total].criteria_items[ci] = cval;
+                                    ci++;
+                                }
+                                cq1 = StringFind(obj_text, "\"", cq2 + 1);
+                                if (cq1 < 0) break;
+                            }
+                        }
+                        
+                        // Parse mandatory (bool array)
+                        int mp = StringFind(obj_text, "\"mandatory\":[");
+                        ArrayResize(sets.bridge_setups[total].criteria_mandatory, 0);
+                        if (mp >= 0) {
+                            int mi = 0;
+                            int mq1 = mp + 13;
+                            while (mq1 < StringLen(obj_text)) {
+                                ushort mc = StringGetCharacter(obj_text, mq1);
+                                if (mc == ']') break;
+                                if (mc == ',' || mc == ' ') { mq1++; continue; }
+                                string mval = "";
+                                if (mc == 't') { mval = "true"; mq1 += 4; }
+                                else if (mc == 'f') { mval = "false"; mq1 += 5; }
+                                else if (mc == '1') { mval = "true"; mq1++; }
+                                else if (mc == '0') { mval = "false"; mq1++; }
+                                else { mq1++; continue; }
+                                ArrayResize(sets.bridge_setups[total].criteria_mandatory, mi + 1);
+                                sets.bridge_setups[total].criteria_mandatory[mi] = (mval == "true");
+                                mi++;
+                            }
+                        }
+                        
+                        total++;
+                    }
+                }
+                obj_start = -1;
+            }
+        }
+    }
+    
+    ExtDialog.SaveSettingsOnDisk();
+    Print("MyPlatform Bridge: Loaded ", IntegerToString(total), " setups.");
 }
 string MPJsonEscape(const string value)
 {

@@ -406,6 +406,31 @@ export async function closeTrade(payload: Record<string, unknown>): Promise<Reco
   return (response.data?.result || {}) as Record<string, unknown>;
 }
 
+export async function appendChecklist(strategyName: string, checklistItems: string[], mandatoryItems: string[]): Promise<void> {
+  await withSessionRetry(() =>
+    apiClient.post(`/strategy-setup/${encodeURIComponent(strategyName)}/checklist`, {
+      checklist_items: checklistItems,
+      mandatory_checklist_items: mandatoryItems,
+    }),
+  );
+}
+
+export async function deleteStrategy(strategyName: string): Promise<void> {
+  await withSessionRetry(() =>
+    apiClient.delete(`/strategy-setup/${encodeURIComponent(strategyName)}`),
+  );
+}
+
+export async function updateStrategy(
+  strategyName: string,
+  payload: { name?: string; checklist_items?: string[]; mandatory_checklist_items?: string[] },
+): Promise<Record<string, unknown>> {
+  const response = await withSessionRetry(() =>
+    apiClient.put(`/strategy-setup/${encodeURIComponent(strategyName)}`, payload),
+  );
+  return (response.data?.strategy || {}) as Record<string, unknown>;
+}
+
 export async function createStrategy(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const response = await withSessionRetry(() => apiClient.post('/strategy-setup/create', payload));
   return (response.data?.strategy || {}) as Record<string, unknown>;
@@ -455,6 +480,28 @@ export async function updateTrade(
     apiClient.patch(`/journal/trade/${encodeURIComponent(tradeId)}`, payload),
   );
   return response.data?.trade as TradeRecord;
+}
+
+export function downloadMt5Config(strategies: StrategyRecord[]): void {
+  const payload = {
+    setups: strategies.map((s) => ({
+      name: s.name,
+      criteria: s.checklist_items || [],
+      mandatory: (s.checklist_items || []).map(
+        (item) => (s.mandatory_checklist_items || []).includes(item),
+      ),
+    })),
+  };
+  const json = JSON.stringify(payload);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mt5_setups_config.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export async function seedInvestorDemoPack(

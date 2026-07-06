@@ -1,14 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 
 import {
+  appendChecklist,
   connectMt5FileBridge,
+  createStrategy,
+  deleteStrategy,
+  downloadMt5Config,
   fetchAccountIntegrations,
   fetchAccounts,
+  fetchStrategies,
   fetchTrades,
   importTradeCsv,
+  updateStrategy,
   validateMt5FileBridge,
 } from '@/api/prototype';
+import type { StrategyRecord } from '@/types/prototype';
 import { ThemeToggle } from '@/components/foundation/ThemeToggle';
 import { usePrototypeStore } from '@/state/prototypeStore';
 import { useThemeStore } from '@/state/themeStore';
@@ -231,6 +238,94 @@ export function SettingsScreen() {
 
   const currentAvatarUrl = accountId ? loadAvatar(accountId) : null;
 
+  // --- Setup Manager State ---
+  const [newSetupName, setNewSetupName] = useState('');
+  const [expandedSetup, setExpandedSetup] = useState<string | null>(null);
+  const [newCriteriaText, setNewCriteriaText] = useState('');
+  const [createSetupSaving, setCreateSetupSaving] = useState(false);
+  const [createSetupError, setCreateSetupError] = useState<string | null>(null);
+
+  const { data: strategies = [] } = useQuery(
+    ['prototype-settings-strategies'],
+    fetchStrategies,
+    { refetchInterval: 15000 },
+  );
+
+  const createSetupMutation = useMutation(
+    async (name: string) => {
+      await createStrategy({ name, description: name, market_types: [], checklist_items: [], mandatory_checklist_items: [] });
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['prototype-settings-strategies']);
+        setNewSetupName('');
+      },
+    },
+  );
+
+  const addCriteriaMutation = useMutation(
+    async (payload: { strategyName: string; criteria: string; mandatory: boolean }) => {
+      const strategy = (strategies as StrategyRecord[]).find((s) => s.name === payload.strategyName);
+      const currentItems = strategy?.checklist_items || [];
+      const currentMandatory = strategy?.mandatory_checklist_items || [];
+      if (currentItems.includes(payload.criteria)) return;
+      await appendChecklist(
+        payload.strategyName,
+        [...currentItems, payload.criteria],
+        payload.mandatory ? [...currentMandatory, payload.criteria] : currentMandatory,
+      );
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['prototype-settings-strategies']);
+        setNewCriteriaText('');
+      },
+    },
+  );
+
+  const deleteSetupMutation = useMutation(
+    async (name: string) => { await deleteStrategy(name); },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(['prototype-settings-strategies']);
+        setExpandedSetup(null);
+      },
+    },
+  );
+
+  const removeCriteriaMutation = useMutation(
+    async (payload: { strategyName: string; criteria: string }) => {
+      const strategy = (strategies as StrategyRecord[]).find((s) => s.name === payload.strategyName);
+      if (!strategy) return;
+      const remaining = strategy.checklist_items.filter((i) => i !== payload.criteria);
+      const remainingMandatory = strategy.mandatory_checklist_items.filter((i) => i !== payload.criteria);
+      await updateStrategy(payload.strategyName, { checklist_items: remaining, mandatory_checklist_items: remainingMandatory });
+    },
+    {
+      onSuccess: () => { queryClient.invalidateQueries(['prototype-settings-strategies']); },
+    },
+  );
+
+  const toggleMandatoryMutation = useMutation(
+    async (payload: { strategyName: string; criteria: string }) => {
+      const strategy = (strategies as StrategyRecord[]).find((s) => s.name === payload.strategyName);
+      if (!strategy) return;
+      const alreadyMandatory = strategy.mandatory_checklist_items.includes(payload.criteria);
+      const newMandatory = alreadyMandatory
+        ? strategy.mandatory_checklist_items.filter((i) => i !== payload.criteria)
+        : [...strategy.mandatory_checklist_items, payload.criteria];
+      await updateStrategy(payload.strategyName, {
+        checklist_items: strategy.checklist_items,
+        mandatory_checklist_items: newMandatory,
+      });
+    },
+    {
+      onSuccess: () => { queryClient.invalidateQueries(['prototype-settings-strategies']); },
+    },
+  );
+
+  const [newCriteriaMandatory, setNewCriteriaMandatory] = useState(false);
+
   return (
     <div className="space-y-6 text-black dark:text-white">
         {/* ─── Card 1: Account Profile ─── */}
@@ -399,12 +494,189 @@ export function SettingsScreen() {
           </div>
         </div>
 
-        {/* ─── Card 3: Trading Preferences ─── */}
+        {/* ─── Card 3: Trading Preferences / Setup Manager ─── */}
         <div>
           <div className="rounded-[26px] border border-black/10 bg-white p-6 dark:border-white/10 dark:bg-[#060606]">
             <h3 className="text-xl font-semibold text-black dark:text-white">Trading Preferences</h3>
-            <div className="mt-4 flex min-h-[120px] items-center justify-center">
-              <p className="text-sm text-black/40 dark:text-white/40">Coming soon.</p>
+            <div className="mt-4 space-y-5">
+              {/* Add Setup Row */}
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={newSetupName}
+                  onChange={(e) => setNewSetupName(e.target.value)}
+                  placeholder="Setup name (e.g. Breakout)"
+                  className="flex-1 rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm font-medium text-black outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!newSetupName.trim()) return;
+                    setCreateSetupSaving(true);
+                    setCreateSetupError(null);
+                    try {
+                      await createSetupMutation.mutateAsync(newSetupName.trim());
+                    } catch (err) {
+                      setCreateSetupError(err instanceof Error ? err.message : 'Failed to create setup');
+                    } finally {
+                      setCreateSetupSaving(false);
+                    }
+                  }}
+                  disabled={createSetupSaving || !newSetupName.trim()}
+                  className="shrink-0 inline-flex rounded-full bg-[#ff5900] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#e04f00] disabled:opacity-50"
+                >
+                  {createSetupSaving ? 'Adding…' : '+ Add Setup'}
+                </button>
+              </div>
+              {createSetupError ? <p className="text-sm text-rose-600">{createSetupError}</p> : null}
+
+              {/* Setup List */}
+              <div className="space-y-3">
+                {(strategies as StrategyRecord[]).length === 0 ? (
+                  <div className="rounded-[18px] border border-dashed border-black/12 px-4 py-6 text-center text-sm text-black/50 dark:border-white/12 dark:text-white/50">
+                    No setups created yet. Add your first setup above.
+                  </div>
+                ) : null}
+                {(strategies as StrategyRecord[]).map((strategy) => {
+                  const isExpanded = expandedSetup === strategy.name;
+                  return (
+                    <div key={strategy.name} className="rounded-[18px] border border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]">
+                      {/* Setup Header */}
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSetup(isExpanded ? null : strategy.name)}
+                          className="flex items-center gap-2 text-left"
+                        >
+                          <span className="text-sm font-semibold text-black dark:text-white">{strategy.name}</span>
+                          <span className="text-xs text-black/50 dark:text-white/50">
+                            {strategy.checklist_items.length} criteria
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSetup(isExpanded ? null : strategy.name)}
+                          className="text-xs text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
+                        >
+                          {isExpanded ? 'Collapse' : 'Edit'}
+                        </button>
+                      </div>
+
+                      {/* Expanded Criteria with full controls */}
+                      {isExpanded ? (
+                        <div className="border-t border-black/10 px-4 py-3 space-y-3 dark:border-white/10">
+                          {/* Delete Setup button */}
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (window.confirm(`Delete setup "${strategy.name}" and all its criteria?`)) {
+                                  await deleteSetupMutation.mutateAsync(strategy.name);
+                                }
+                              }}
+                              disabled={deleteSetupMutation.isLoading}
+                              className="inline-flex rounded-full border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:border-rose-500 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:border-rose-600 dark:hover:bg-rose-950"
+                            >
+                              Delete Setup
+                            </button>
+                          </div>
+
+                          {/* Existing Criteria with controls */}
+                          {strategy.checklist_items.map((item) => {
+                            const isMandatory = strategy.mandatory_checklist_items.includes(item);
+                            return (
+                              <div key={item} className="flex items-center justify-between rounded-[12px] border border-black/8 bg-white px-3 py-2 dark:border-white/10 dark:bg-[#0a0a0a]">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleMandatoryMutation.mutate({ strategyName: strategy.name, criteria: item })}
+                                    title={isMandatory ? 'Click to make optional' : 'Click to make mandatory'}
+                                    className="shrink-0"
+                                  >
+                                    {isMandatory ? (
+                                      <span className="text-[#ff5900] text-base">★</span>
+                                    ) : (
+                                      <span className="text-black/30 dark:text-white/30 text-base">☆</span>
+                                    )}
+                                  </button>
+                                  <span className={`text-sm truncate ${isMandatory ? 'font-semibold text-black dark:text-white' : 'text-black/80 dark:text-white/80'}`}>
+                                    {item}
+                                    {isMandatory ? <span className="ml-1.5 text-[10px] uppercase tracking-wider text-[#ff5900]">Mandatory</span> : null}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await removeCriteriaMutation.mutateAsync({ strategyName: strategy.name, criteria: item });
+                                  }}
+                                  disabled={removeCriteriaMutation.isLoading}
+                                  className="ml-2 shrink-0 rounded-full border border-rose-200 px-2 py-0.5 text-xs text-rose-500 transition hover:border-rose-400 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            );
+                          })}
+
+                          {/* Add Criteria with mandatory toggle */}
+                          <div className="flex flex-wrap items-center gap-2 pt-2">
+                            <input
+                              type="text"
+                              value={newCriteriaText}
+                              onChange={(e) => setNewCriteriaText(e.target.value)}
+                              placeholder="New criteria..."
+                              className="flex-1 min-w-[140px] rounded-[14px] border border-black/10 bg-white px-3 py-2 text-sm text-black outline-none dark:border-white/10 dark:bg-[#0a0a0a] dark:text-white"
+                            />
+                            <label className="flex items-center gap-1.5 text-xs cursor-pointer shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={newCriteriaMandatory}
+                                onChange={(e) => setNewCriteriaMandatory(e.target.checked)}
+                                className="accent-[#ff5900]"
+                              />
+                              <span className="text-black/70 dark:text-white/70">Mandatory</span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!newCriteriaText.trim()) return;
+                                await addCriteriaMutation.mutateAsync({
+                                  strategyName: strategy.name,
+                                  criteria: newCriteriaText.trim(),
+                                  mandatory: newCriteriaMandatory,
+                                });
+                                setNewCriteriaMandatory(false);
+                              }}
+                              disabled={addCriteriaMutation.isLoading || !newCriteriaText.trim()}
+                              className="inline-flex rounded-full border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black transition hover:border-[#ff5900] dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white disabled:opacity-40"
+                            >
+                              + Add Criteria
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Export to MT5 */}
+              <div className="border-t border-black/10 pt-4 dark:border-white/10">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-black/50 dark:text-white/50">
+                  Export to MT5
+                </p>
+                <p className="text-sm text-black/60 dark:text-white/60">
+                  Download a JSON config file with all setups and criteria to load into the MT5 Position Sizer EA.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => downloadMt5Config(strategies as StrategyRecord[])}
+                  disabled={(strategies as StrategyRecord[]).length === 0}
+                  className="mt-3 inline-flex rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-black transition hover:border-emerald-500 hover:text-emerald-600 disabled:opacity-40 dark:border-white/10 dark:bg-[#0b0b0b] dark:text-white dark:hover:border-emerald-500 dark:hover:text-emerald-400"
+                >
+                  Download MT5 Config
+                </button>
+              </div>
             </div>
           </div>
         </div>

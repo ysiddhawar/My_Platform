@@ -124,6 +124,14 @@ class StrategyRepository:
         )
         return self.save_strategy(strategy)
 
+    def delete_strategy(self, name: str) -> None:
+        with self._lock:
+            self._connection.execute("DELETE FROM strategies WHERE name = ?", (name,))
+            self._connection.commit()
+
+    def update_strategy(self, strategy: Strategy) -> Dict[str, Any]:
+        return self.save_strategy(strategy)
+
     def close(self):
         with self._lock:
             if self._connection:
