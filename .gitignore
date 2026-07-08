@@ -263,3 +263,4 @@ dmypy.json
 # Operating System Files
 # Keep these patterns here at the end of your .gitignore to avoid adding
 # system files to your repository accidentally
+.agents/
